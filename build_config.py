@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-PyInstaller 构建配置脚本
-生成单个可执行文件及其依赖
+PyInstaller build configuration script
 """
 
 import os
@@ -9,8 +8,9 @@ import sys
 import subprocess
 from pathlib import Path
 
+
 def build_app():
-    """构建可执行文件"""
+    """Build executable"""
     
     project_root = Path(__file__).parent
     dist_dir = project_root / "dist"
@@ -20,16 +20,20 @@ def build_app():
     print("Building application...")
     print("=" * 60)
     
-    # PyInstaller 参数
+    # Get architecture from environment
+    arch = os.environ.get('PYINSTALLER_ARCH', '64bit')
+    app_name = f"app-{arch}"
+    
+    # PyInstaller arguments
     cmd = [
         sys.executable,
         "-m", "PyInstaller",
-        "--onefile",                          # 单文件模式
-        "--windowed",                         # 窗口模式（无命令行）
-        "--name=标准下载",                     # 应用名称
-        "--add-data=core:core",               # 添加核心模块
-        "--add-data=sources:sources",         # 添加数据源模块
-        "--add-data=ppllocr:ppllocr",         # 添加 OCR 模块
+        "--onefile",
+        "--windowed",
+        f"--name={app_name}",
+        "--add-data=core:core",
+        "--add-data=sources:sources",
+        "--add-data=ppllocr:ppllocr",
         "--hidden-import=core",
         "--hidden-import=core.models",
         "--hidden-import=core.aggregated_downloader",
@@ -53,21 +57,21 @@ def build_app():
         str(project_root / "desktop_app.py"),
     ]
     
-    # 移除 None 值
-    cmd = [arg for arg in cmd if arg is not None]
-    
-    print(f"执行命令: {' '.join(cmd)}\n")
+    print(f"Running: {' '.join(cmd)}\n")
+    print(f"Architecture: {arch}\n")
     
     try:
         result = subprocess.run(cmd, cwd=str(project_root), check=True)
         
         if result.returncode == 0:
-            exe_path = dist_dir / "标准下载.exe"
+            exe_path = dist_dir / f"{app_name}.exe"
             if exe_path.exists():
+                file_size_mb = exe_path.stat().st_size / (1024*1024)
                 print("\n" + "=" * 60)
                 print("Build successful!")
                 print(f"Executable: {exe_path}")
-                print(f"File size: {exe_path.stat().st_size / (1024*1024):.1f} MB")
+                print(f"File size: {file_size_mb:.1f} MB")
+                print(f"Architecture: {arch}")
                 print("=" * 60 + "\n")
                 return True
         else:
@@ -78,8 +82,8 @@ def build_app():
         print(f"Build error: {e}")
         return False
 
+
 if __name__ == "__main__":
-    # 检查依赖
     try:
         import PyInstaller
     except ImportError:
@@ -88,3 +92,4 @@ if __name__ == "__main__":
     
     success = build_app()
     sys.exit(0 if success else 1)
+
