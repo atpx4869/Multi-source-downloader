@@ -1,52 +1,38 @@
-# 标准下载 - 桌面应用
+# Standard Downloader
 
-一款高效的中文标准文档下载工具，支持多个数据源（国家标准、内部系统、标准云等），提供友好的图形界面。
+A desktop application for downloading Chinese standard documents from multiple sources.
 
-## 功能特性
+## Download
 
-- 📚 **多源支持**：聚合多个标准数据源
-  - GBW（国家标准）
-  - BY（内部系统）
-  - ZBY（标准云）
+Get the latest release from [GitHub Releases](https://github.com/atpx4869/Multi-source-downloader/releases):
 
-- 🔍 **快速搜索**：实时搜索标准号、名称等
-- 📥 **批量下载**：支持选中多个标准进行批量下载
-- 💾 **导出功能**：将搜索结果导出为 CSV 格式
-- ⚙️ **自定义路径**：灵活设置下载目录
-- 📊 **实时日志**：查看操作日志和下载进度
-- 🔗 **连通性检测**：自动检测各数据源的可用状态
+- **StandardDownloader-x64.exe** - For 64-bit Windows (recommended)
+- **StandardDownloader-x86.exe** - For 32-bit Windows
 
-## 系统要求
+## Features
 
-- Windows 10 或更高版本
-- Python 3.8+（如果从源码运行）
+- Multi-source aggregation (GBW, BY, ZBY)
+- Batch download support
+- Export to CSV
+- Real-time download logs
+- Source connectivity detection
 
-## 快速开始
+## Requirements
 
-### 方式 1：使用可执行文件（推荐）
+- Windows 10 or later
+- No Python installation required
 
-从 [GitHub Releases](../../releases) 下载最新的 `标准下载.exe`，双击即可运行。
-
-### 方式 2：从源码运行
+## Build from Source
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/yourusername/standard-downloader.git
-cd standard-downloader
-
-# 2. 创建虚拟环境（可选但推荐）
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
-
-# 3. 安装依赖
 pip install -r requirements.txt
-
-# 4. 运行应用
-python desktop_app.py
+pip install pyinstaller
+pyinstaller --onefile --windowed desktop_app.py
 ```
+
+## License
+
+MIT
 
 ## 项目结构
 

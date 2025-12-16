@@ -8,7 +8,6 @@ env/
 venv/
 .venv*/
 pip-log.txt
-pip-delete-this-directory.txt
 
 # PyInstaller
 build/
@@ -19,14 +18,13 @@ dist/
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Project specific
+# Project
 downloads/
+*.log
 *.exe
 *.zip
