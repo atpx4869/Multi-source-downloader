@@ -76,11 +76,24 @@ jobs:
           --collect-submodules=numpy `
           desktop_app.py
     
-    - name: Upload artifact
+    - name: Package source code
+      shell: pwsh
+      run: |
+        $excludes = @('.git', '__pycache__', 'build', 'dist', '*.spec', '.auth_cache', 'downloads')
+        Compress-Archive -Path desktop_app.py, core, sources, ppllocr, requirements.txt, README.md -DestinationPath "dist/SourceCode-${{ env.VERSION }}.zip"
+    
+    - name: Upload executable artifact
       uses: actions/upload-artifact@v4
       with:
         name: StandardDownloader-x64-${{ env.VERSION }}
         path: dist/*.exe
+        retention-days: 30
+    
+    - name: Upload source code artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SourceCode-${{ env.VERSION }}
+        path: dist/*.zip
         retention-days: 30
 
   release:
@@ -92,16 +105,24 @@ jobs:
     - name: Get version from tag
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
     
-    - name: Download artifacts
+    - name: Download exe artifact
       uses: actions/download-artifact@v4
       with:
         name: StandardDownloader-x64-${{ env.VERSION }}
         path: artifacts
     
+    - name: Download source code artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: SourceCode-${{ env.VERSION }}
+        path: artifacts
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: artifacts/*.exe
+        files: |
+          artifacts/*.exe
+          artifacts/*.zip
         generate_release_notes: true
         draft: false
         prerelease: false
