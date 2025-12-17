@@ -306,7 +306,51 @@ class GBWSource:
                 if match:
                     hcno = match.group(1)
                     emit(f"GBW: 验证成功，获取 HCNO: {hcno[:8]}...")
-                    # 进一步下载可在此实现（需要确认下载接口）；当前返回成功信息
+                    # 尝试通过 HCNO 下载 PDF
+                    emit("GBW: 尝试通过 HCNO 下载 PDF...")
+                    # 首先在页面中搜索可能的 PDF 链接
+                    pdf_link_match = re.search(r'href=["\']([^"\']+\.pdf)["\']', resp.text, re.IGNORECASE)
+                    if pdf_link_match:
+                        pdf_url = pdf_link_match.group(1)
+                        if not pdf_url.startswith('http'):
+                            pdf_url = self.base_url + pdf_url
+                        emit(f"GBW: 在页面中找到 PDF 链接: {pdf_url}")
+                        try:
+                            r = self.session.get(pdf_url, cookies=cookies, timeout=15)
+                            if r.status_code == 200 and r.headers.get('content-type','').lower().startswith('application/pdf') or (r.content[:4] == b'%PDF'):
+                                out_path = output_dir / item.filename()
+                                with open(out_path, 'wb') as f:
+                                    f.write(r.content)
+                                emit(f"GBW: PDF 下载成功 -> {out_path}")
+                                return out_path, logs
+                        except Exception as e:
+                            emit(f"GBW: 下载 PDF 失败: {e}")
+
+                    # 如果页面中无链接，尝试若干常见的下载端点
+                    candidates = [
+                        f"{self.base_url}/servlet/Download?HCNO={hcno}",
+                        f"{self.base_url}/hcno/download?hcno={hcno}",
+                        f"{self.base_url}/attachment/download?hcno={hcno}",
+                        f"{self.base_url}/download?hcno={hcno}",
+                        f"{self.base_url}/gb/search/gcDown?hcno={hcno}",
+                    ]
+
+                    for url in candidates:
+                        try:
+                            emit(f"GBW: 尝试 {url}")
+                            r = self.session.get(url, cookies=cookies, timeout=15)
+                            if r.status_code == 200:
+                                ct = r.headers.get('content-type','').lower()
+                                if 'application/pdf' in ct or r.content[:4] == b'%PDF':
+                                    out_path = output_dir / item.filename()
+                                    with open(out_path, 'wb') as f:
+                                        f.write(r.content)
+                                    emit(f"GBW: PDF 下载成功 -> {out_path}")
+                                    return out_path, logs
+                        except Exception as e:
+                            emit(f"GBW: 请求 {url} 失败: {e}")
+
+                    emit("GBW: 未能通过已知端点直接下载 PDF，可能需要额外逆向页面请求流程")
                     return None, logs
                 else:
                     emit("GBW: 验证后仍未找到 HCNO，可能识别错误或页面流程不同")
