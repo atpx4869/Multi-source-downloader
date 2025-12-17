@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Callable
 
 from core.models import Standard
+from .gbw_download import get_hcno, download_with_ocr, sanitize_filename
 
 
 class GBWSource:
@@ -156,6 +157,29 @@ class GBWSource:
             logs.append(msg)
             if log_cb:
                 log_cb(msg)
+
+        emit("GBW: 尝试使用请求(非浏览器)方式下载（优先）...")
+        # 尝试使用 requests 风格的下载实现（无需浏览器），优先执行
+        try:
+            meta = item.source_meta
+            item_id = meta.get("id", "") if isinstance(meta, dict) else ""
+            hcno = (meta.get("hcno") if isinstance(meta, dict) else None) or (self._get_hcno(item_id) if item_id else "")
+            if hcno:
+                emit(f"GBW: 使用 requests 获取到 HCNO: {hcno[:8]}...")
+                out_dir = output_dir or Path("downloads")
+                out_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    filename = item.filename()
+                except Exception:
+                    filename = sanitize_filename(item.name or item.std_no) + '.pdf'
+                out_path = out_dir / filename
+                ok = download_with_ocr(hcno, out_path, logger=emit)
+                if ok:
+                    emit(f"GBW: requests 下载成功 -> {out_path}")
+                    return out_path, logs
+                emit("GBW: requests 下载未成功，回退到浏览器自动化方式")
+        except Exception as e:
+            emit(f"GBW: requests 下载尝试出错: {e}")
 
         emit("GBW: 尝试使用浏览器自动化处理验证码...")
 
