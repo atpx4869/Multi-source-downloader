@@ -5,9 +5,6 @@ import re
 import time
 
 from core.models import Standard, natural_key
-from sources.gbw import GBWSource
-from sources.by import BYSource
-from sources.zby import ZBYSource
 
 PRIORITY = ["GBW", "BY", "ZBY"]
 
@@ -32,7 +29,23 @@ class AggregatedDownloader:
         self.output_dir = Path(output_dir)
         self.sources: List[object] = []
         self.health_cache: Dict[str, SourceHealth] = {}
-        candidates = [("GBW", GBWSource), ("BY", BYSource), ("ZBY", ZBYSource)]
+        # 延迟导入各源以避免循环导入问题
+        mapping = {
+            "GBW": ("sources.gbw", "GBWSource"),
+            "BY": ("sources.by", "BYSource"),
+            "ZBY": ("sources.zby", "ZBYSource"),
+        }
+        candidates: List[Tuple[str, object]] = []
+        for name, (modname, clsname) in mapping.items():
+            try:
+                mod = __import__(modname, fromlist=[clsname])
+                cls = getattr(mod, clsname)
+                candidates.append((name, cls))
+            except Exception as exc:
+                # 记录到 health_cache，继续其他源
+                self.health_cache[name] = SourceHealth(name)
+                self.health_cache[name].error = str(exc)
+                print(f"跳过源 {name}：{exc}")
         for name, cls in candidates:
             if enable_sources and name not in enable_sources:
                 continue
