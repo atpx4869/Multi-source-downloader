@@ -104,30 +104,25 @@ def get_aggregated_downloader(enable_sources=None, output_dir=None):
         inst = _AD_CACHE.get(key)
         if inst is not None:
             return inst
-        # 延迟导入/实例化以避免模块导入顺序问题
-        try:
-            if AggregatedDownloader is None:
-                return None
-            inst = AggregatedDownloader(output_dir=output_dir or None, enable_sources=list(enable_sources) if enable_sources else None)
-            _AD_CACHE[key] = inst
-            return inst
-        except Exception:
-            # 不缓存失败的实例，调用者应当处理 None 或异常
-            raise
 
-# When running as a PyInstaller frozen executable the bundled certifi
-# data may be extracted to a temporary location. Ensure requests/ssl
-# use the correct CA bundle so HTTPS requests succeed after bundling.
-import sys, os
-if getattr(sys, 'frozen', False):
-    try:
-        import certifi
-        ca = certifi.where()
-        if ca and os.path.exists(ca):
-            os.environ.setdefault('REQUESTS_CA_BUNDLE', ca)
-            os.environ.setdefault('SSL_CERT_FILE', ca)
-    except Exception:
-        pass
+        # 延迟导入 core.AggregatedDownloader，若不可用则返回 None
+        try:
+            from core import AggregatedDownloader
+        
+            try:
+                inst = AggregatedDownloader(enable_sources=enable_sources, output_dir=output_dir)
+            except Exception:
+                # 打印详细 traceback 以便诊断初始化失败原因
+                print("[get_aggregated_downloader] AggregatedDownloader init failed:")
+                traceback.print_exc()
+                return None
+        except Exception:
+            print("[get_aggregated_downloader] import/core failure:")
+            traceback.print_exc()
+            return None
+
+        _AD_CACHE[key] = inst
+        return inst
 
 try:
     from core import AggregatedDownloader
@@ -520,24 +515,10 @@ class DownloadThread(QtCore.QThread):
         fail = 0
         total = len(self.items)
         
-        try:
-            try:
-                client = get_aggregated_downloader(enable_sources=None, output_dir=self.output_dir)
-            except Exception as e:
-                self.log.emit("AggregatedDownloader 无法实例化，跳过下载")
-                self.log.emit(traceback.format_exc())
-                self.finished.emit(0, len(self.items))
-                return
-            if client is None:
-                self.log.emit("AggregatedDownloader 未找到，跳过下载")
-                self.finished.emit(0, len(self.items))
-                return
-        except Exception:
-            tb = traceback.format_exc()
-            self.log.emit("AggregatedDownloader 无法实例化，跳过下载")
-            self.log.emit(tb)
-            self.finished.emit(0, len(self.items))
-            return
+        # Note: create a fresh AggregatedDownloader per item to avoid reuse of
+        # internal state across sequential downloads, which can cause intermittent
+        # failures for some sources. Errors instantiating per-item clients are
+        # handled per-item so other downloads can continue.
 
         for idx, it in enumerate(self.items, start=1):
             std_no = it.get("std_no")
@@ -547,7 +528,7 @@ class DownloadThread(QtCore.QThread):
             try:
                 # 获取原始对象
                 obj = it.get("obj")
-                
+
                 # 尝试从后台缓存合并更多源信息
                 if obj and self.background_cache:
                     key = _STD_NO_RE.sub("", std_no or "").lower()
@@ -564,9 +545,58 @@ class DownloadThread(QtCore.QThread):
                             for k, v in cached.source_meta.items():
                                 if k not in obj.source_meta:
                                     obj.source_meta[k] = v
-                        self.log.emit(f"   ↳ 已合并后台数据，可用源: {obj.sources}")
-                
-                path, logs = client.download(obj)
+                        # 合并后台数据后只输出简要提示，避免过度冗长的源列表
+                        self.log.emit(f"   ↳ 已合并后台数据")
+
+                # 在下载前记录对象的来源信息，便于排查失败时的来源
+                    # 不再打印完整的 source/meta 调试信息，避免泄露冗长内容
+
+                # 为每个条目创建独立的 AggregatedDownloader 实例
+                try:
+                    from core import AggregatedDownloader as _AD
+                    client = _AD(output_dir=self.output_dir, enable_sources=None)
+                except Exception:
+                    tb = traceback.format_exc()
+                    self.log.emit(f"   ✗ 为 {std_no} 创建 AggregatedDownloader 失败，跳过该条: {str(tb)[:200]}")
+                    fail += 1
+                    continue
+
+                try:
+                    path, logs = client.download(obj)
+                except Exception as e:
+                    # 在 download 抛出异常时记录 obj 的源信息与 traceback
+                    try:
+                        self.log.emit(f"   ↳ download 异常时 sources: {getattr(obj, 'sources', None)} | source_meta: {getattr(obj, 'source_meta', None)}")
+                    except Exception:
+                        pass
+                    tb = traceback.format_exc()
+                    self.log.emit(f"   ❌ 错误: {std_no} - {str(e)[:200]}")
+                    self.log.emit(tb)
+                    fail += 1
+                    continue
+
+                # 记录 client.download 返回的日志信息（如果有）以便追踪具体使用的源
+                try:
+                    if logs:
+                        # 从下载日志中挑选重要信息（包含关键词的行），最多显示三行
+                        important = []
+                        keywords = ("成功", "失败", "下载完成", "获取到UUID", "PDF生成成功", "requests 下载成功")
+                        for line in logs:
+                            try:
+                                if any(k in line for k in keywords):
+                                    important.append(line)
+                                if len(important) >= 3:
+                                    break
+                            except Exception:
+                                continue
+                        if important:
+                            for l in important:
+                                self.log.emit(f"   ↳ {l}")
+                        else:
+                            # 若无关键行，则只显示简短计数信息
+                            self.log.emit(f"   ↳ download 日志: {len(logs)} 条，详情已记录")
+                except Exception:
+                    pass
                 if path:
                     self.log.emit(f"   ✅ 下载完成: {std_no}")
                     success += 1
@@ -615,7 +645,7 @@ class StandardTableModel(QtCore.QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._items: list[dict] = []
-        self._headers = ["✓", "序号", "标准号", "名称", "发布日期", "实施日期", "状态", "文本"]
+        self._headers = ["选中", "序号", "标准号", "名称", "来源", "发布日期", "实施日期", "状态", "文本"]
 
     def rowCount(self, parent=QtCore.QModelIndex()):
         return len(self._items)
@@ -629,6 +659,8 @@ class StandardTableModel(QtCore.QAbstractTableModel):
         r = index.row(); c = index.column()
         item = self._items[r]
         if role == QtCore.Qt.DisplayRole:
+            if c == 0:
+                return "●" if item.get("_selected") else ""
             if c == 1:
                 return str(item.get("_display_idx", r + 1))
             if c == 2:
@@ -636,15 +668,23 @@ class StandardTableModel(QtCore.QAbstractTableModel):
             if c == 3:
                 return item.get("name", "")
             if c == 4:
-                return item.get("publish", "")
+                # 显示来源（优先使用合并后的 _display_source）
+                disp = item.get('_display_source') or (item.get('sources')[0] if item.get('sources') else None)
+                return disp or ""
             if c == 5:
-                return item.get("implement", "")
+                return item.get("publish", "")
             if c == 6:
-                return item.get("status", "")
+                return item.get("implement", "")
             if c == 7:
+                return item.get("status", "")
+            if c == 8:
                 return "✓" if item.get("has_pdf") else "-"
-        if role == QtCore.Qt.CheckStateRole and c == 0:
-            return QtCore.Qt.Checked if item.get("_checked") else QtCore.Qt.Unchecked
+        if role == QtCore.Qt.BackgroundRole and c == 0 and item.get("_selected"):
+            return QtGui.QBrush(QtGui.QColor("#3498db"))
+        if role == QtCore.Qt.ForegroundRole and c == 0 and item.get("_selected"):
+            return QtGui.QBrush(QtGui.QColor("#ffffff"))
+        if role == QtCore.Qt.TextAlignmentRole and c == 0:
+            return QtCore.Qt.AlignCenter
         return None
 
     def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
@@ -656,17 +696,12 @@ class StandardTableModel(QtCore.QAbstractTableModel):
         if not index.isValid():
             return QtCore.Qt.NoItemFlags
         flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
-        if index.column() == 0:
-            flags |= QtCore.Qt.ItemIsUserCheckable
         return flags
 
     def setData(self, index, value, role=QtCore.Qt.EditRole):
         if not index.isValid():
             return False
-        if role == QtCore.Qt.CheckStateRole and index.column() == 0:
-            self._items[index.row()]["_checked"] = (value == QtCore.Qt.Checked)
-            self.dataChanged.emit(index, index, [QtCore.Qt.CheckStateRole])
-            return True
+        return False
         return False
 
     def set_items(self, items: list[dict]):
@@ -674,21 +709,21 @@ class StandardTableModel(QtCore.QAbstractTableModel):
         self._items = []
         for i, it in enumerate(items, start=1):
             copy = dict(it)
-            copy.setdefault("_checked", False)
+            copy.setdefault("_selected", False)
             copy.setdefault("_display_idx", i)
             self._items.append(copy)
         self.endResetModel()
 
     def get_selected_items(self) -> list[dict]:
-        return [it for it in self._items if it.get("_checked")]
+        return [it for it in self._items if it.get("_selected")]
 
-    def set_all_checked(self, checked: bool):
+    def set_all_selected(self, selected: bool):
         for it in self._items:
-            it["_checked"] = bool(checked)
+            it["_selected"] = bool(selected)
         if self._items:
             top = self.index(0, 0)
             bottom = self.index(len(self._items) - 1, 0)
-            self.dataChanged.emit(top, bottom, [QtCore.Qt.CheckStateRole])
+            self.dataChanged.emit(top, bottom, [QtCore.Qt.BackgroundRole, QtCore.Qt.DisplayRole])
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -765,6 +800,15 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("标准下载 - 桌面版")
         self.resize(1200, 750)
+        # 应用全局样式（包含对话框样式与统一的复选框样式）
+        try:
+            self.setStyleSheet(ui_styles.DIALOG_STYLE + getattr(ui_styles, 'CHECKBOX_STYLE', ''))
+        except Exception:
+            # 如果样式拼接失败，降级为仅应用对话框样式
+            try:
+                self.setStyleSheet(ui_styles.DIALOG_STYLE)
+            except Exception:
+                pass
 
         # 配置存储
         self.settings = {
@@ -1052,6 +1096,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table_model = StandardTableModel(self)
         self.table.setModel(self.table_model)
         self.table.verticalHeader().setVisible(False)
+        # 允许编辑触发（确保复选框点击可被处理）
+        # 保持表格不可编辑，使用行选择来标记条目
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
@@ -1065,10 +1111,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(7, 50)
         # 美化：专业配色（深蓝头、浅灰行）
         header = self.table.horizontalHeader()
-        header.setStyleSheet(ui_styles.TABLE_HEADER_STYLE)
-        self.table.setStyleSheet(ui_styles.TABLE_STYLE)
-        # 监听模型数据变化，更新选中数量
+        # 将 CHECKBOX_STYLE 追加到表头和表格样式，避免局部样式覆盖全局复选框样式
+        header.setStyleSheet(ui_styles.TABLE_HEADER_STYLE + getattr(ui_styles, 'CHECKBOX_STYLE', ''))
+        self.table.setStyleSheet(ui_styles.TABLE_STYLE + getattr(ui_styles, 'CHECKBOX_STYLE', ''))
+        # 启用交替行颜色以增强可读性（交替颜色由 TABLE_STYLE 中的 alternate-background-color 控制）
+        try:
+            self.table.setAlternatingRowColors(True)
+        except Exception:
+            pass
+        # 监听模型数据变化，更新已选数量
         self.table_model.dataChanged.connect(lambda *args, **kwargs: self.update_selection_count())
+        # 当用户选择行时，同步模型的 _selected 标记并刷新指示列
+        self.table.selectionModel().selectionChanged.connect(self.on_table_selection_changed)
+        # 右键菜单用于下载等操作
+        self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.on_table_context_menu)
         left_layout.addWidget(self.table)
         
         # 分页控件行
@@ -1679,6 +1736,36 @@ class MainWindow(QtWidgets.QMainWindow):
     def apply_filter(self):
         """根据筛选条件显示数据"""
         items = self.all_items.copy()
+
+        # PDF筛选
+        if self.chk_filter_pdf.isChecked():
+            items = [r for r in items if r.get("has_pdf")]
+
+        # 状态筛选
+        status_filter = self.combo_status_filter.currentText()
+        if "全部" not in status_filter:
+            if "现行有效" in status_filter:
+                items = [r for r in items if "现行" in r.get("status", "")]
+            elif "即将实施" in status_filter:
+                items = [r for r in items if "即将实施" in r.get("status", "")]
+            elif "已废止" in status_filter:
+                items = [r for r in items if "废止" in r.get("status", "")]
+            elif "其他" in status_filter:
+                items = [r for r in items if not any(s in r.get("status", "") for s in ["现行", "即将实施", "废止"])]
+
+        self.filtered_items = items
+
+        # 计算分页
+        page_size = self.get_page_size()
+        total_count = len(items)
+        self.total_pages = max(1, (total_count + page_size - 1) // page_size)
+
+        # 确保当前页有效
+        if self.current_page > self.total_pages:
+            self.current_page = self.total_pages
+        if self.current_page < 1:
+            self.current_page = 1
+
         # 获取当前页数据并交给模型展示
         start_idx = (self.current_page - 1) * page_size
         end_idx = start_idx + page_size
@@ -1709,39 +1796,6 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception:
                 pass
 
-        self.update_page_controls(total_count)
-        self.update_selection_count()
-            self.current_page = 1
-        
-        # 获取当前页数据
-        start_idx = (self.current_page - 1) * page_size
-        end_idx = start_idx + page_size
-        page_items = items[start_idx:end_idx]
-        
-        self.current_items = page_items
-        
-        # 更新表格
-        self.table.setRowCount(0)
-        for idx, r in enumerate(page_items, start=start_idx + 1):
-            # 批量插入行时阻断信号以避免触发 on_table_item_changed 多次
-            self.table.blockSignals(True)
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            # 复选框（使用可勾选的 QTableWidgetItem）
-            chk = QtWidgets.QTableWidgetItem()
-            chk.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
-            chk.setCheckState(QtCore.Qt.Unchecked)
-            self.table.setItem(row, 0, chk)
-            self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(idx)))
-            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(r.get("std_no", "")))
-            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(r.get("name", "")))
-            self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(r.get("publish", "")))
-            self.table.setItem(row, 5, QtWidgets.QTableWidgetItem(r.get("implement", "")))
-            self.table.setItem(row, 6, QtWidgets.QTableWidgetItem(r.get("status", "")))
-            self.table.setItem(row, 7, QtWidgets.QTableWidgetItem("✓" if r.get("has_pdf") else "-"))
-        
-        # 恢复信号并更新分页控件
-        self.table.blockSignals(False)
         self.update_page_controls(total_count)
         self.update_selection_count()
     
@@ -1786,7 +1840,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_select_all(self):
         """全选所有行"""
         if hasattr(self, 'table_model') and self.table_model:
-            self.table_model.set_all_checked(True)
+            self.table_model.set_all_selected(True)
         else:
             for row in range(self.table.rowCount()):
                 item = self.table.item(row, 0)
@@ -1797,13 +1851,36 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_deselect_all(self):
         """取消全选"""
         if hasattr(self, 'table_model') and self.table_model:
-            self.table_model.set_all_checked(False)
+            self.table_model.set_all_selected(False)
         else:
             for row in range(self.table.rowCount()):
                 item = self.table.item(row, 0)
                 if item:
                     item.setCheckState(QtCore.Qt.Unchecked)
         self.update_selection_count()
+
+    def on_table_selection_changed(self, selected, deselected):
+        """同步选择模型到项的 _selected 标记并刷新指示列"""
+        try:
+            sel_rows = {idx.row() for idx in self.table.selectionModel().selectedRows()}
+            for i, it in enumerate(self.table_model._items):
+                prev = bool(it.get("_selected"))
+                now = i in sel_rows
+                if prev != now:
+                    it["_selected"] = now
+                    idx = self.table_model.index(i, 0)
+                    self.table_model.dataChanged.emit(idx, idx, [QtCore.Qt.BackgroundRole, QtCore.Qt.DisplayRole, QtCore.Qt.ForegroundRole])
+        except Exception:
+            pass
+        self.update_selection_count()
+
+    def on_table_context_menu(self, pos):
+        """表格右键菜单：下载所选"""
+        menu = QtWidgets.QMenu(self)
+        act_download = menu.addAction("下载所选")
+        act = menu.exec_(self.table.viewport().mapToGlobal(pos))
+        if act == act_download:
+            self.on_download()
     
     def update_selection_count(self):
         """更新已选数量显示"""
