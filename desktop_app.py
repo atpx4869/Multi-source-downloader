@@ -29,10 +29,45 @@ from datetime import datetime
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+# Ensure the local "sources" package is discovered by PyInstaller
+# Some imports are dynamic in the codebase; this explicit import helps
+# PyInstaller include the package into the frozen bundle.
+try:
+    import sources  # type: ignore
+    # also import common submodules so PyInstaller includes them
+    try:
+        import sources.gbw  # type: ignore
+    except Exception:
+        pass
+    try:
+        import sources.by  # type: ignore
+    except Exception:
+        pass
+    try:
+        import sources.zby  # type: ignore
+    except Exception:
+        pass
+except Exception:
+    pass
+
 import traceback
 import pandas as pd
 
 from PySide6 import QtCore, QtWidgets, QtGui
+
+# When running as a PyInstaller frozen executable the bundled certifi
+# data may be extracted to a temporary location. Ensure requests/ssl
+# use the correct CA bundle so HTTPS requests succeed after bundling.
+import sys, os
+if getattr(sys, 'frozen', False):
+    try:
+        import certifi
+        ca = certifi.where()
+        if ca and os.path.exists(ca):
+            os.environ.setdefault('REQUESTS_CA_BUNDLE', ca)
+            os.environ.setdefault('SSL_CERT_FILE', ca)
+    except Exception:
+        pass
 
 try:
     from core import AggregatedDownloader
