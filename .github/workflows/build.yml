@@ -47,11 +47,35 @@ jobs:
         python -m pip install playwright
         python -m playwright install chromium
     
-    - name: Build executable
-      shell: bash
+    - name: Build executable (PyInstaller)
+      shell: pwsh
       run: |
-        pyinstaller --onefile --windowed --name StandardDownloader desktop_app.py
-        mv dist/StandardDownloader.exe "dist/StandardDownloader-x64-${{ env.VERSION }}.exe"
+        Write-Host "=== Environment and versions ==="
+        python -m pip list
+        python -m pip show pyinstaller || Write-Host "PyInstaller not installed yet"
+        python -c "import sys; print('Python', sys.version)"
+        Write-Host "=== Running PyInstaller ==="
+        python -m PyInstaller --onefile --windowed --name StandardDownloader desktop_app.py --log-level=DEBUG
+        if (Test-Path dist\StandardDownloader.exe) {
+            $dest = "dist\StandardDownloader-x64-$($env:VERSION).exe"
+            Write-Host "Moving exe to $dest"
+            Move-Item -Path dist\StandardDownloader.exe -Destination $dest -Force
+        } else {
+            Write-Host "PyInstaller did not produce dist\StandardDownloader.exe"
+            Exit 1
+        }
+
+    - name: Show PyInstaller warnings (if any)
+      if: always()
+      shell: pwsh
+      run: |
+        $warn = 'build\StandardDownloader\warn-StandardDownloader.txt'
+        if (Test-Path $warn) {
+            Write-Host "--- PyInstaller warnings ---"
+            Get-Content $warn | Write-Host
+        } else {
+            Write-Host "No PyInstaller warn file found"
+        }
     
     - name: Package source code
       shell: pwsh
