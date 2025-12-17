@@ -25,6 +25,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
+import re
 
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
@@ -84,20 +85,44 @@ import traceback
 import pandas as pd
 
 from PySide6 import QtCore, QtWidgets, QtGui
+import ui_styles
 
-# When running as a PyInstaller frozen executable the bundled certifi
-# data may be extracted to a temporary location. Ensure requests/ssl
-# use the correct CA bundle so HTTPS requests succeed after bundling.
-import sys, os
-if getattr(sys, 'frozen', False):
-    try:
-        import certifi
-        ca = certifi.where()
-        if ca and os.path.exists(ca):
-            os.environ.setdefault('REQUESTS_CA_BUNDLE', ca)
-            os.environ.setdefault('SSL_CERT_FILE', ca)
-    except Exception:
-        pass
+# 规范号规范化正则（复用以避免在循环中重复编译）
+_STD_NO_RE = re.compile(r"[\s/\-–—_:：]+")
+import threading
+
+# 缓存 AggregatedDownloader 实例以减少重复初始化开销
+_AD_CACHE: dict = {}
+_AD_CACHE_LOCK = threading.Lock()
+
+def get_aggregated_downloader(enable_sources=None, output_dir=None):
+    """返回一个复用的 AggregatedDownloader 实例（按 enable_sources+output_dir 缓存）。
+    如果 AggregatedDownloader 未导入或无法实例化，则返回 None 或抛出原始异常。
+    """
+    key = (tuple(enable_sources) if enable_sources else None, output_dir)
+    with _AD_CACHE_LOCK:
+        inst = _AD_CACHE.get(key)
+        if inst is not None:
+            return inst
+
+        # 延迟导入 core.AggregatedDownloader，若不可用则返回 None
+        try:
+            from core import AggregatedDownloader
+        
+            try:
+                inst = AggregatedDownloader(enable_sources=enable_sources, output_dir=output_dir)
+            except Exception:
+                # 打印详细 traceback 以便诊断初始化失败原因
+                print("[get_aggregated_downloader] AggregatedDownloader init failed:")
+                traceback.print_exc()
+                return None
+        except Exception:
+            print("[get_aggregated_downloader] import/core failure:")
+            traceback.print_exc()
+            return None
+
+        _AD_CACHE[key] = inst
+        return inst
 
 try:
     from core import AggregatedDownloader
@@ -155,11 +180,7 @@ class PasswordDialog(QtWidgets.QDialog):
         self.max_attempts = 5
         
     def setup_ui(self):
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f8f9fa;
-            }
-        """)
+        self.setStyleSheet(ui_styles.DIALOG_STYLE)
         
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(10)
@@ -254,22 +275,7 @@ class PasswordDialog(QtWidgets.QDialog):
         self.btn_confirm = QtWidgets.QPushButton("确 认")
         self.btn_confirm.setCursor(QtCore.Qt.PointingHandCursor)
         self.btn_confirm.setFixedHeight(38)
-        self.btn_confirm.setStyleSheet("""
-            QPushButton {
-                background-color: #34c2db;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #346edb;
-            }
-            QPushButton:pressed {
-                background-color: #2d5bc7;
-            }
-        """)
+        self.btn_confirm.setStyleSheet(ui_styles.BTN_PRIMARY_STYLE)
         self.btn_confirm.clicked.connect(self.verify_password)
         layout.addWidget(self.btn_confirm)
         
@@ -364,10 +370,9 @@ class SearchThread(QtCore.QThread):
                 self.log.emit("AggregatedDownloader 未找到，无法执行搜索（请确认项目结构）")
                 self.results.emit([])
                 return
-
             # 优先搜索 ZBY（最全的源）
             search_sources = self.sources or ["ZBY"]
-            
+
             # 如果用户选择的源中包含 ZBY，优先只搜索 ZBY
             if "ZBY" in search_sources:
                 primary_source = ["ZBY"]
@@ -380,8 +385,19 @@ class SearchThread(QtCore.QThread):
                 self.progress.emit(0, 100, f"正在搜索 {', '.join(search_sources)}...")
 
             self.progress.emit(20, 100, "正在加载搜索页面...")
-            
-            client = AggregatedDownloader(output_dir=self.output_dir, enable_sources=primary_source)
+
+            # 使用复用的 AggregatedDownloader 实例
+            client = None
+            try:
+                client = get_aggregated_downloader(enable_sources=primary_source, output_dir=self.output_dir)
+            except Exception as e:
+                self.log.emit(f"无法创建 AggregatedDownloader: {e}")
+                self.results.emit([])
+                return
+            if client is None:
+                self.log.emit("AggregatedDownloader 未找到，无法执行搜索（请确认项目结构）")
+                self.results.emit([])
+                return
             
             self.progress.emit(40, 100, "正在解析搜索结果...")
             items = client.search(self.keyword, page=int(self.page), page_size=int(self.page_size))
@@ -407,6 +423,7 @@ class SearchThread(QtCore.QThread):
         except Exception as e:
             tb = traceback.format_exc()
             self.log.emit(f"❌ 搜索出错: {e}")
+            self.log.emit(tb)
             self.error.emit(tb)
             self.progress.emit(0, 100, "搜索失败")
 
@@ -438,13 +455,19 @@ class BackgroundSearchThread(QtCore.QThread):
             for src_name in self.sources:
                 try:
                     self.log.emit(f"   ↳ 正在搜索 {src_name}...")
-                    client = AggregatedDownloader(output_dir=self.output_dir, enable_sources=[src_name])
+                    try:
+                        client = get_aggregated_downloader(enable_sources=[src_name], output_dir=self.output_dir)
+                    except Exception as e:
+                        self.log.emit(f"   ✗ 创建 AggregatedDownloader 失败: {e}")
+                        continue
+                    if client is None:
+                        self.log.emit(f"   ✗ AggregatedDownloader 未就绪: {src_name}")
+                        continue
                     items = client.search(self.keyword, page=int(self.page), page_size=int(self.page_size))
                     
                     for it in items:
                         # 标准化 std_no 作为 key
-                        import re
-                        key = re.sub(r"[\s/\-–—_:：]+", "", it.std_no or "").lower()
+                        key = _STD_NO_RE.sub("", it.std_no or "").lower()
                         if key not in cache:
                             cache[key] = it
                         else:
@@ -468,7 +491,9 @@ class BackgroundSearchThread(QtCore.QThread):
             self.log.emit(f"✅ 后台搜索完成，共缓存 {len(cache)} 条补充数据")
             
         except Exception as e:
+            tb = traceback.format_exc()
             self.log.emit(f"❌ 后台搜索出错: {e}")
+            self.log.emit(tb)
             self.progress.emit("后台加载失败")
         
         self.finished.emit(cache)
@@ -490,12 +515,10 @@ class DownloadThread(QtCore.QThread):
         fail = 0
         total = len(self.items)
         
-        try:
-            client = AggregatedDownloader(output_dir=self.output_dir, enable_sources=None)
-        except Exception:
-            self.log.emit("AggregatedDownloader 无法实例化，跳过下载")
-            self.finished.emit(0, len(self.items))
-            return
+        # Note: create a fresh AggregatedDownloader per item to avoid reuse of
+        # internal state across sequential downloads, which can cause intermittent
+        # failures for some sources. Errors instantiating per-item clients are
+        # handled per-item so other downloads can continue.
 
         for idx, it in enumerate(self.items, start=1):
             std_no = it.get("std_no")
@@ -505,11 +528,10 @@ class DownloadThread(QtCore.QThread):
             try:
                 # 获取原始对象
                 obj = it.get("obj")
-                
+
                 # 尝试从后台缓存合并更多源信息
                 if obj and self.background_cache:
-                    import re
-                    key = re.sub(r"[\s/\-–—_:：]+", "", std_no or "").lower()
+                    key = _STD_NO_RE.sub("", std_no or "").lower()
                     cached = self.background_cache.get(key)
                     if cached:
                         # 合并源信息
@@ -523,9 +545,58 @@ class DownloadThread(QtCore.QThread):
                             for k, v in cached.source_meta.items():
                                 if k not in obj.source_meta:
                                     obj.source_meta[k] = v
-                        self.log.emit(f"   ↳ 已合并后台数据，可用源: {obj.sources}")
-                
-                path, logs = client.download(obj)
+                        # 合并后台数据后只输出简要提示，避免过度冗长的源列表
+                        self.log.emit(f"   ↳ 已合并后台数据")
+
+                # 在下载前记录对象的来源信息，便于排查失败时的来源
+                    # 不再打印完整的 source/meta 调试信息，避免泄露冗长内容
+
+                # 为每个条目创建独立的 AggregatedDownloader 实例
+                try:
+                    from core import AggregatedDownloader as _AD
+                    client = _AD(output_dir=self.output_dir, enable_sources=None)
+                except Exception:
+                    tb = traceback.format_exc()
+                    self.log.emit(f"   ✗ 为 {std_no} 创建 AggregatedDownloader 失败，跳过该条: {str(tb)[:200]}")
+                    fail += 1
+                    continue
+
+                try:
+                    path, logs = client.download(obj)
+                except Exception as e:
+                    # 在 download 抛出异常时记录 obj 的源信息与 traceback
+                    try:
+                        self.log.emit(f"   ↳ download 异常时 sources: {getattr(obj, 'sources', None)} | source_meta: {getattr(obj, 'source_meta', None)}")
+                    except Exception:
+                        pass
+                    tb = traceback.format_exc()
+                    self.log.emit(f"   ❌ 错误: {std_no} - {str(e)[:200]}")
+                    self.log.emit(tb)
+                    fail += 1
+                    continue
+
+                # 记录 client.download 返回的日志信息（如果有）以便追踪具体使用的源
+                try:
+                    if logs:
+                        # 从下载日志中挑选重要信息（包含关键词的行），最多显示三行
+                        important = []
+                        keywords = ("成功", "失败", "下载完成", "获取到UUID", "PDF生成成功", "requests 下载成功")
+                        for line in logs:
+                            try:
+                                if any(k in line for k in keywords):
+                                    important.append(line)
+                                if len(important) >= 3:
+                                    break
+                            except Exception:
+                                continue
+                        if important:
+                            for l in important:
+                                self.log.emit(f"   ↳ {l}")
+                        else:
+                            # 若无关键行，则只显示简短计数信息
+                            self.log.emit(f"   ↳ download 日志: {len(logs)} 条，详情已记录")
+                except Exception:
+                    pass
                 if path:
                     self.log.emit(f"   ✅ 下载完成: {std_no}")
                     success += 1
@@ -533,11 +604,126 @@ class DownloadThread(QtCore.QThread):
                     self.log.emit(f"   ❌ 下载失败: {std_no}")
                     fail += 1
             except Exception as e:
+                tb = traceback.format_exc()
                 self.log.emit(f"   ❌ 错误: {std_no} - {str(e)[:120]}")
+                self.log.emit(tb)
                 fail += 1
 
         self.progress.emit(total, total, "下载完成")
         self.finished.emit(success, fail)
+
+
+class SourceHealthThread(QtCore.QThread):
+    """在后台检查数据源连通性并通过信号返回结果"""
+    finished = QtCore.Signal(dict)
+    error = QtCore.Signal(str)
+
+    def __init__(self, force: bool = False, parent=None):
+        super().__init__(parent)
+        self.force = force
+
+    def run(self):
+        try:
+            try:
+                client = get_aggregated_downloader(enable_sources=["GBW", "BY", "ZBY"], output_dir=None)
+            except Exception:
+                import traceback as _tb
+                self.error.emit(_tb.format_exc())
+                return
+            if client is None:
+                self.error.emit("AggregatedDownloader 未就绪")
+                return
+            health_status = client.check_source_health(force=self.force)
+            self.finished.emit(health_status)
+        except Exception:
+            import traceback
+            self.error.emit(traceback.format_exc())
+
+
+class StandardTableModel(QtCore.QAbstractTableModel):
+    """简单的表格模型，替代 QTableWidget 用于更高效渲染和批量操作"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._items: list[dict] = []
+        self._headers = ["选中", "序号", "标准号", "名称", "来源", "发布日期", "实施日期", "状态", "文本"]
+
+    def rowCount(self, parent=QtCore.QModelIndex()):
+        return len(self._items)
+
+    def columnCount(self, parent=QtCore.QModelIndex()):
+        return len(self._headers)
+
+    def data(self, index, role=QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        r = index.row(); c = index.column()
+        item = self._items[r]
+        if role == QtCore.Qt.DisplayRole:
+            if c == 0:
+                return "●" if item.get("_selected") else ""
+            if c == 1:
+                return str(item.get("_display_idx", r + 1))
+            if c == 2:
+                return item.get("std_no", "")
+            if c == 3:
+                return item.get("name", "")
+            if c == 4:
+                # 显示来源（优先使用合并后的 _display_source）
+                disp = item.get('_display_source') or (item.get('sources')[0] if item.get('sources') else None)
+                return disp or ""
+            if c == 5:
+                return item.get("publish", "")
+            if c == 6:
+                return item.get("implement", "")
+            if c == 7:
+                return item.get("status", "")
+            if c == 8:
+                return "✓" if item.get("has_pdf") else "-"
+        if role == QtCore.Qt.BackgroundRole and c == 0 and item.get("_selected"):
+            return QtGui.QBrush(QtGui.QColor("#3498db"))
+        if role == QtCore.Qt.ForegroundRole and c == 0 and item.get("_selected"):
+            return QtGui.QBrush(QtGui.QColor("#ffffff"))
+        if role == QtCore.Qt.TextAlignmentRole and c == 0:
+            return QtCore.Qt.AlignCenter
+        return None
+
+    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
+        if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:
+            return self._headers[section]
+        return None
+
+    def flags(self, index):
+        if not index.isValid():
+            return QtCore.Qt.NoItemFlags
+        flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+        return flags
+
+    def setData(self, index, value, role=QtCore.Qt.EditRole):
+        if not index.isValid():
+            return False
+        return False
+        return False
+
+    def set_items(self, items: list[dict]):
+        self.beginResetModel()
+        self._items = []
+        for i, it in enumerate(items, start=1):
+            copy = dict(it)
+            copy.setdefault("_selected", False)
+            copy.setdefault("_display_idx", i)
+            self._items.append(copy)
+        self.endResetModel()
+
+    def get_selected_items(self) -> list[dict]:
+        return [it for it in self._items if it.get("_selected")]
+
+    def set_all_selected(self, selected: bool):
+        for it in self._items:
+            it["_selected"] = bool(selected)
+        if self._items:
+            top = self.index(0, 0)
+            bottom = self.index(len(self._items) - 1, 0)
+            self.dataChanged.emit(top, bottom, [QtCore.Qt.BackgroundRole, QtCore.Qt.DisplayRole])
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -614,6 +800,15 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("标准下载 - 桌面版")
         self.resize(1200, 750)
+        # 应用全局样式（包含对话框样式与统一的复选框样式）
+        try:
+            self.setStyleSheet(ui_styles.DIALOG_STYLE + getattr(ui_styles, 'CHECKBOX_STYLE', ''))
+        except Exception:
+            # 如果样式拼接失败，降级为仅应用对话框样式
+            try:
+                self.setStyleSheet(ui_styles.DIALOG_STYLE)
+            except Exception:
+                pass
 
         # 配置存储
         self.settings = {
@@ -650,40 +845,11 @@ class MainWindow(QtWidgets.QMainWindow):
         sr_layout.setSpacing(8)
         self.input_keyword = QtWidgets.QLineEdit()
         self.input_keyword.setPlaceholderText("输入标准号或名称（例如 GB/T 3324）")
-        self.input_keyword.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #3498db;
-                border-radius: 3px;
-                padding: 6px;
-                font-size: 11px;
-                background-color: white;
-                color: #333;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3445db;
-                background-color: white;
-                color: #333;
-            }
-        """)
+        self.input_keyword.setStyleSheet(ui_styles.INPUT_STYLE)
         self.input_keyword.returnPressed.connect(self.on_search)
         self.btn_search = QtWidgets.QPushButton("🔍 检索")
         self.btn_search.setMinimumWidth(80)
-        self.btn_search.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 6px 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #346edb;
-            }
-            QPushButton:pressed {
-                background-color: #3445db;
-            }
-        """)
+        self.btn_search.setStyleSheet(ui_styles.BTN_PRIMARY_STYLE)
         self.btn_search.clicked.connect(self.on_search)
         sr_layout.addWidget(self.input_keyword, 3)
         sr_layout.addWidget(self.btn_search, 1)
@@ -925,10 +1091,13 @@ class MainWindow(QtWidgets.QMainWindow):
         
         left_layout.addWidget(table_op_row)
 
-        # 结果表 - 紧凑样式
-        self.table = QtWidgets.QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["✓", "序号", "标准号", "名称", "发布日期", "实施日期", "状态", "文本"])
+        # 结果表 - 使用 QTableView + StandardTableModel 提升性能与可扩展性
+        self.table = QtWidgets.QTableView()
+        self.table_model = StandardTableModel(self)
+        self.table.setModel(self.table_model)
         self.table.verticalHeader().setVisible(False)
+        # 允许编辑触发（确保复选框点击可被处理）
+        # 保持表格不可编辑，使用行选择来标记条目
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
@@ -940,89 +1109,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(5, 100)
         self.table.setColumnWidth(6, 100)
         self.table.setColumnWidth(7, 50)
-        self.table.setRowHeight(0, 36)
         # 美化：专业配色（深蓝头、浅灰行）
         header = self.table.horizontalHeader()
-        header.setStyleSheet("""
-            QHeaderView::section {
-                background-color: #3445db;
-                color: white;
-                font-weight: bold;
-                padding: 6px;
-                border: 1px solid #3445db;
-            }
-        """)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #e0e0e0;
-                background-color: #f8f9fa;
-            }
-            QTableWidget::item {
-                padding: 6px;
-                border: 1px solid #e8e8e8;
-                background-color: white;
-                color: #333;
-            }
-            QTableWidget::item:selected {
-                background-color: #3498db;
-                color: white;
-            }
-            QTableWidget::indicator:unchecked {
-                background-color: white;
-                border: 3px solid #d0d0d0;
-                width: 20px;
-                height: 20px;
-                margin: 1px;
-            }
-            QTableWidget::indicator:checked {
-                background-color: #e74c3c;
-                border: 3px solid #c0392b;
-                width: 20px;
-                height: 20px;
-                margin: 1px;
-                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cGF0aCBkPSJNMTMuNzEgMy43MWwtNy43MSA3LjcxTC4yOSA4LjI5YS45OTkuOTk5IDAgMDAtMS40MTQgMS40MTRMNC41NjkgMTMuNDMxYy4zOTMuMzkyIDEuMDI4LjM5MiAxLjQyIDAgMDAwIDAgLjAwMiAwbDkuMTkyLTkuMTkyYTEgMSAwIDAwLTEuNDEzLTEuNDEyeiIgZmlsbD0id2hpdGUiLz48L3N2Zz4=);
-            }            QScrollBar:vertical {
-                background-color: #f0f0f0;
-                width: 12px;
-                margin: 0px;
-                border: none;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #3498db;
-                min-height: 20px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #346edb;
-            }
-            QScrollBar::handle:vertical:pressed {
-                background-color: #3445db;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar:horizontal {
-                background-color: #f0f0f0;
-                height: 12px;
-                margin: 0px;
-                border: none;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #3498db;
-                min-width: 20px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background-color: #346edb;
-            }
-            QScrollBar::handle:horizontal:pressed {
-                background-color: #3445db;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
-            }        """)
-        # 监听表格项变化，更新选中数量
-        self.table.itemChanged.connect(self.on_table_item_changed)
+        # 将 CHECKBOX_STYLE 追加到表头和表格样式，避免局部样式覆盖全局复选框样式
+        header.setStyleSheet(ui_styles.TABLE_HEADER_STYLE + getattr(ui_styles, 'CHECKBOX_STYLE', ''))
+        self.table.setStyleSheet(ui_styles.TABLE_STYLE + getattr(ui_styles, 'CHECKBOX_STYLE', ''))
+        # 启用交替行颜色以增强可读性（交替颜色由 TABLE_STYLE 中的 alternate-background-color 控制）
+        try:
+            self.table.setAlternatingRowColors(True)
+        except Exception:
+            pass
+        # 监听模型数据变化，更新已选数量
+        self.table_model.dataChanged.connect(lambda *args, **kwargs: self.update_selection_count())
+        # 当用户选择行时，同步模型的 _selected 标记并刷新指示列
+        self.table.selectionModel().selectionChanged.connect(self.on_table_selection_changed)
+        # 右键菜单用于下载等操作
+        self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.on_table_context_menu)
         left_layout.addWidget(self.table)
         
         # 分页控件行
@@ -1381,6 +1484,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log(f"已导出到: {path}")
             QtWidgets.QMessageBox.information(self, "成功", f"已导出 {len(data)} 条到:\n{path}")
         except Exception as e:
+            tb = traceback.format_exc()
+            self.append_log(tb)
             QtWidgets.QMessageBox.critical(self, "导出失败", str(e))
 
     def on_about(self):
@@ -1418,6 +1523,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 subprocess.run(["xdg-open", str(folder_path)])
             self.append_log(f"打开文件夹: {folder_path}")
         except Exception as e:
+            tb = traceback.format_exc()
+            self.append_log(tb)
             QtWidgets.QMessageBox.warning(self, "提示", f"无法打开文件夹: {e}")
 
     def update_path_display(self):
@@ -1426,23 +1533,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_download_path.setText(output_dir)
 
     def update_source_checkboxes(self):
-        """根据源的连通性更新复选框状态"""
+        """根据源的连通性更新复选框状态（在后台线程中执行）"""
         try:
-            from core import AggregatedDownloader
-            
-            # 检查所有源的连通性
-            client = AggregatedDownloader(enable_sources=["GBW", "BY", "ZBY"])
-            health_status = client.check_source_health()
-            
-            # 根据连通性设置复选框
-            for src_name, checkbox in [("GBW", self.chk_gbw), ("BY", self.chk_by), ("ZBY", self.chk_zby)]:
-                health = health_status.get(src_name)
-                if health and health.available:
-                    checkbox.setChecked(True)
-                    checkbox.setEnabled(True)
-                else:
-                    checkbox.setChecked(False)
-                    checkbox.setEnabled(False)
+            # 启动后台线程检查连通性，结果通过 `_on_source_health_result` 回调
+            th = SourceHealthThread(force=False, parent=self)
+            self._source_health_thread = th
+            th.finished.connect(self._on_source_health_result)
+            th.error.connect(lambda tb: self.append_log(f"更新源复选框失败: {tb.splitlines()[-1] if tb else '错误'}"))
+            th.start()
         except Exception as e:
             self.append_log(f"更新源复选框失败: {str(e)[:40]}")
 
@@ -1459,29 +1557,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def check_source_health(self):
         """检查源连通性"""
+        # 使用后台线程执行检查（结果更新交由回调处理）
         try:
-            from core import AggregatedDownloader
-            sources_enabled = self.settings.get("sources", ["GBW", "BY", "ZBY"])
-            
-            # 创建下载器获取源状态
-            client = AggregatedDownloader(enable_sources=sources_enabled)
-            health_status = client.check_source_health()
-            
-            status_parts = []
-            for src in ["GBW", "BY", "ZBY"]:
-                health = health_status.get(src)
-                if health:
-                    is_available = health.available
-                    enabled = src in sources_enabled
-                    if is_available:
-                        icon = "🟢" if enabled else "⚪"
-                    else:
-                        icon = "🔴"
-                    status_parts.append(f"{icon}{src}")
-            
-            status_text = " ".join(status_parts)
-            self.lbl_source_status.setText(status_text)
-            self.lbl_source_status.setStyleSheet("color: #34dbcb; font-weight: bold;")
+            th = SourceHealthThread(force=False, parent=self)
+            self._source_health_thread = th
+            th.finished.connect(self._on_check_source_health_result)
+            th.error.connect(lambda tb: (self.lbl_source_status.setText("检测失败"), self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;"), self.append_log(tb.splitlines()[-1] if tb else "source health error")))
+            th.start()
         except Exception as e:
             self.lbl_source_status.setText(f"检测失败: {str(e)[:20]}")
             self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;")
@@ -1611,15 +1693,54 @@ class MainWindow(QtWidgets.QMainWindow):
         # 存为 pending，等待线程 finished 信号再更新界面，避免在搜索过程中部分/空结果被误显示
         self._pending_search_rows = rows
         self.status.showMessage(f"已接收 {len(rows)} 条结果，等待搜索完成...", 2000)
+
+    def _on_source_health_result(self, health_status: dict):
+        """用于 `update_source_checkboxes` 的回调，更新复选框状态"""
+        try:
+            for src_name, checkbox in [("GBW", self.chk_gbw), ("BY", self.chk_by), ("ZBY", self.chk_zby)]:
+                health = health_status.get(src_name)
+                if health and getattr(health, 'available', False):
+                    checkbox.setChecked(True)
+                    checkbox.setEnabled(True)
+                else:
+                    checkbox.setChecked(False)
+                    checkbox.setEnabled(False)
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.append_log(tb)
+
+    def _on_check_source_health_result(self, health_status: dict):
+        """用于 `check_source_health` 的回调，更新状态标签"""
+        try:
+            status_parts = []
+            sources_enabled = self.settings.get("sources", ["GBW", "BY", "ZBY"])
+            for src in ["GBW", "BY", "ZBY"]:
+                health = health_status.get(src)
+                if health:
+                    is_available = getattr(health, 'available', False)
+                    enabled = src in sources_enabled
+                    if is_available:
+                        icon = "🟢" if enabled else "⚪"
+                    else:
+                        icon = "🔴"
+                    status_parts.append(f"{icon}{src}")
+            status_text = " ".join(status_parts)
+            self.lbl_source_status.setText(status_text)
+            self.lbl_source_status.setStyleSheet("color: #34dbcb; font-weight: bold;")
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.append_log(tb)
+            self.lbl_source_status.setText(f"检测失败: {str(e)[:20]}")
+            self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;")
     
     def apply_filter(self):
         """根据筛选条件显示数据"""
         items = self.all_items.copy()
-        
+
         # PDF筛选
         if self.chk_filter_pdf.isChecked():
             items = [r for r in items if r.get("has_pdf")]
-        
+
         # 状态筛选
         status_filter = self.combo_status_filter.currentText()
         if "全部" not in status_filter:
@@ -1631,46 +1752,50 @@ class MainWindow(QtWidgets.QMainWindow):
                 items = [r for r in items if "废止" in r.get("status", "")]
             elif "其他" in status_filter:
                 items = [r for r in items if not any(s in r.get("status", "") for s in ["现行", "即将实施", "废止"])]
-        
+
         self.filtered_items = items
-        
+
         # 计算分页
         page_size = self.get_page_size()
         total_count = len(items)
         self.total_pages = max(1, (total_count + page_size - 1) // page_size)
-        
+
         # 确保当前页有效
         if self.current_page > self.total_pages:
             self.current_page = self.total_pages
         if self.current_page < 1:
             self.current_page = 1
-        
-        # 获取当前页数据
+
+        # 获取当前页数据并交给模型展示
         start_idx = (self.current_page - 1) * page_size
         end_idx = start_idx + page_size
         page_items = items[start_idx:end_idx]
-        
+
         self.current_items = page_items
-        
-        # 更新表格
-        self.table.setRowCount(0)
-        for idx, r in enumerate(page_items, start=start_idx + 1):
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            # 复选框（使用可勾选的 QTableWidgetItem）
-            chk = QtWidgets.QTableWidgetItem()
-            chk.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
-            chk.setCheckState(QtCore.Qt.Unchecked)
-            self.table.setItem(row, 0, chk)
-            self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(idx)))
-            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(r.get("std_no", "")))
-            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(r.get("name", "")))
-            self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(r.get("publish", "")))
-            self.table.setItem(row, 5, QtWidgets.QTableWidgetItem(r.get("implement", "")))
-            self.table.setItem(row, 6, QtWidgets.QTableWidgetItem(r.get("status", "")))
-            self.table.setItem(row, 7, QtWidgets.QTableWidgetItem("✓" if r.get("has_pdf") else "-"))
-        
-        # 更新分页控件
+
+        # 将 page_items 传入模型（模型会触发刷新）
+        if hasattr(self, 'table_model') and self.table_model:
+            self.table_model.set_items(page_items)
+        else:
+            # 兼容回退到 QTableWidget（极少用）
+            try:
+                self.table.setRowCount(0)
+                for idx, r in enumerate(page_items, start=start_idx + 1):
+                    row = self.table.rowCount()
+                    chk = QtWidgets.QTableWidgetItem()
+                    chk.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+                    chk.setCheckState(QtCore.Qt.Unchecked)
+                    self.table.setItem(row, 0, chk)
+                    self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(idx)))
+                    self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(r.get("std_no", "")))
+                    self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(r.get("name", "")))
+                    self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(r.get("publish", "")))
+                    self.table.setItem(row, 5, QtWidgets.QTableWidgetItem(r.get("implement", "")))
+                    self.table.setItem(row, 6, QtWidgets.QTableWidgetItem(r.get("status", "")))
+                    self.table.setItem(row, 7, QtWidgets.QTableWidgetItem("✓" if r.get("has_pdf") else "-"))
+            except Exception:
+                pass
+
         self.update_page_controls(total_count)
         self.update_selection_count()
     
@@ -1714,27 +1839,62 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def on_select_all(self):
         """全选所有行"""
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                item.setCheckState(QtCore.Qt.Checked)
+        if hasattr(self, 'table_model') and self.table_model:
+            self.table_model.set_all_selected(True)
+        else:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item:
+                    item.setCheckState(QtCore.Qt.Checked)
         self.update_selection_count()
     
     def on_deselect_all(self):
         """取消全选"""
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                item.setCheckState(QtCore.Qt.Unchecked)
+        if hasattr(self, 'table_model') and self.table_model:
+            self.table_model.set_all_selected(False)
+        else:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item:
+                    item.setCheckState(QtCore.Qt.Unchecked)
         self.update_selection_count()
+
+    def on_table_selection_changed(self, selected, deselected):
+        """同步选择模型到项的 _selected 标记并刷新指示列"""
+        try:
+            sel_rows = {idx.row() for idx in self.table.selectionModel().selectedRows()}
+            for i, it in enumerate(self.table_model._items):
+                prev = bool(it.get("_selected"))
+                now = i in sel_rows
+                if prev != now:
+                    it["_selected"] = now
+                    idx = self.table_model.index(i, 0)
+                    self.table_model.dataChanged.emit(idx, idx, [QtCore.Qt.BackgroundRole, QtCore.Qt.DisplayRole, QtCore.Qt.ForegroundRole])
+        except Exception:
+            pass
+        self.update_selection_count()
+
+    def on_table_context_menu(self, pos):
+        """表格右键菜单：下载所选"""
+        menu = QtWidgets.QMenu(self)
+        act_download = menu.addAction("下载所选")
+        act = menu.exec_(self.table.viewport().mapToGlobal(pos))
+        if act == act_download:
+            self.on_download()
     
     def update_selection_count(self):
         """更新已选数量显示"""
         count = 0
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item and item.checkState() == QtCore.Qt.Checked:
-                count += 1
+        try:
+            if hasattr(self, 'table_model') and self.table_model:
+                count = len(self.table_model.get_selected_items())
+            else:
+                for row in range(self.table.rowCount()):
+                    item = self.table.item(row, 0)
+                    if item and item.checkState() == QtCore.Qt.Checked:
+                        count += 1
+        except Exception:
+            count = 0
         self.lbl_selection_count.setText(f"已选: {count}")
     
     def on_table_item_changed(self, item):
@@ -1755,40 +1915,43 @@ class MainWindow(QtWidgets.QMainWindow):
     def _do_recheck_sources(self):
         """执行源检测"""
         try:
-            from core import AggregatedDownloader
-            
-            # 强制重新检测所有源
-            client = AggregatedDownloader(enable_sources=["GBW", "BY", "ZBY"])
-            health_status = client.check_source_health(force=True)
-            
-            # 更新复选框状态
-            for src_name, checkbox in [("GBW", self.chk_gbw), ("BY", self.chk_by), ("ZBY", self.chk_zby)]:
-                health = health_status.get(src_name)
-                if health and health.available:
-                    checkbox.setChecked(True)
-                    checkbox.setEnabled(True)
-                    self.append_log(f"✅ {src_name} 源可用")
-                else:
-                    checkbox.setChecked(False)
-                    checkbox.setEnabled(False)
-                    self.append_log(f"❌ {src_name} 源不可用")
-            
-            # 更新状态显示
-            self.check_source_health()
-            self.append_log("数据源检测完成")
+            th = SourceHealthThread(force=True, parent=self)
+            self._source_health_thread = th
+            def _on_finished(status):
+                for src_name, checkbox in [("GBW", self.chk_gbw), ("BY", self.chk_by), ("ZBY", self.chk_zby)]:
+                    health = status.get(src_name)
+                    if health and health.available:
+                        checkbox.setChecked(True)
+                        checkbox.setEnabled(True)
+                        self.append_log(f"✅ {src_name} 源可用")
+                    else:
+                        checkbox.setChecked(False)
+                        checkbox.setEnabled(False)
+                        self.append_log(f"❌ {src_name} 源不可用")
+
+                # 更新状态显示
+                self._on_check_source_health_result(status)
+                self.append_log("数据源检测完成")
+                self.btn_recheck_sources.setEnabled(True)
+
+            th.finished.connect(_on_finished)
+            th.error.connect(lambda tb: (self.append_log(tb), self.lbl_source_status.setText("检测失败"), self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;"), setattr(self, 'btn_recheck_sources', self.btn_recheck_sources)))
+            th.start()
         except Exception as e:
             self.append_log(f"检测失败: {str(e)}")
             self.lbl_source_status.setText("检测失败")
             self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;")
-        finally:
             self.btn_recheck_sources.setEnabled(True)
 
     def on_download(self):
         selected = []
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item and item.checkState() == QtCore.Qt.Checked:
-                selected.append(self.current_items[row])
+        if hasattr(self, 'table_model') and self.table_model:
+            selected = self.table_model.get_selected_items()
+        else:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item and item.checkState() == QtCore.Qt.Checked:
+                    selected.append(self.current_items[row])
 
         if not selected:
             QtWidgets.QMessageBox.information(self, "提示", "请先选择要下载的行")

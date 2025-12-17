@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import re
 import time
+import sys
 
 from core.models import Standard, natural_key
 
@@ -232,7 +233,45 @@ class AggregatedDownloader:
                 item.sources = list(dict.fromkeys(item.sources or [src_name]))
                 # 确保新项的 source_meta 格式正确
                 item.source_meta = {src_name: meta_data}
+                # 初始时设置展示来源为空，后续可能在合并时调整
+                item._display_source = src_name
                 existing[key] = item
+
+        # After merge, evaluate which source should be used for display
+        try:
+            for k, obj in existing.items():
+                # compute completeness score per source (count of non-empty meta fields)
+                meta_map = obj.source_meta if isinstance(obj.source_meta, dict) else {}
+                scores = {}
+                for sname, smeta in meta_map.items():
+                    if not isinstance(smeta, dict):
+                        scores[sname] = 0
+                        continue
+                    cnt = 0
+                    for v in smeta.values():
+                        try:
+                            if v:
+                                cnt += 1
+                        except Exception:
+                            pass
+                    scores[sname] = cnt
+
+                # Prefer ZBY for display only when its completeness exceeds the sum of others
+                zby_score = scores.get('ZBY', 0)
+                others_score = sum(v for k2, v in scores.items() if k2 != 'ZBY')
+                if zby_score > others_score and zby_score > 0:
+                    obj._display_source = 'ZBY'
+                    # move ZBY to front of sources list for UI display, keep uniqueness
+                    srcs = list(dict.fromkeys(obj.sources or []))
+                    if 'ZBY' in srcs:
+                        srcs.remove('ZBY')
+                        srcs.insert(0, 'ZBY')
+                        obj.sources = srcs
+                else:
+                    # otherwise, leave display source as-is (first source)
+                    obj._display_source = obj.sources[0] if obj.sources else None
+        except Exception:
+            pass
 
     def search(self, keyword: str, **kwargs) -> List[Standard]:
         combined: Dict[str, Standard] = {}
@@ -291,8 +330,20 @@ class AggregatedDownloader:
         # 获取该标准在各源的 PDF 状态（用于显示）
         meta_map = item.source_meta if isinstance(item.source_meta, dict) else {}
         
-        # 按优先级顺序获取可用的源
-        ordered_sources = [src for src in self.sources if src.name in item.sources]
+        # 构建下载尝试顺序：严格按照全局 PRIORITY（GBW > BY > ZBY）去匹配可用的 item.sources
+        ordered_sources = []
+        try:
+            src_names_set = set(item.sources or [])
+            for name in PRIORITY:
+                for src in self.sources:
+                    if src.name == name and src.name in src_names_set:
+                        ordered_sources.append(src)
+            # 兜底：若还有未包含的 sources（不在 PRIORITY 中），追加在最后
+            for src in self.sources:
+                if src.name in src_names_set and src not in ordered_sources:
+                    ordered_sources.append(src)
+        except Exception:
+            ordered_sources = [src for src in self.sources if src.name in (item.sources or [])]
         
         if not ordered_sources:
             emit("没有可用的下载源")
