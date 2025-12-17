@@ -145,9 +145,59 @@ class ZBYSource:
             session.mount('https://', adapter)
             session.mount('http://', adapter)
 
-            headers = {"User-Agent": "Mozilla/5.0", "Referer": self.base_url}
-            urls = [f"{self.base_url}/standardList", f"{self.base_url}/search", f"{self.base_url}/api/search"]
+            # Try JSON API first (observed endpoint in site XHR)
+            api_url = "https://login.bz.zhenggui.vip/bzy-api/org/std/search"
+            headers = {"User-Agent": "Mozilla/5.0", "Referer": self.base_url, "Origin": self.base_url}
+            body = {
+                "params": {
+                    "pageNo": int(page),
+                    "pageSize": int(page_size),
+                    "model": {
+                        "standardNum": None,
+                        "standardName": None,
+                        "standardType": None,
+                        "standardCls": None,
+                        "keyword": keyword,
+                        "forceEffective": "0",
+                        "standardStatus": None,
+                        "searchType": "1",
+                        "standardPubTimeType": "0",
+                    },
+                },
+                "token": "",
+                "userId": "",
+                "orgId": "",
+                "time": "",
+            }
 
+            try:
+                r = session.post(api_url, headers={**headers, "Content-Type": "application/json;charset=UTF-8"}, json=body, timeout=8)
+                if r.status_code == 200:
+                    j = r.json()
+                    rows = None
+                    if isinstance(j, dict):
+                        data = j.get('data') or j.get('result') or {}
+                        rows = data.get('rows') if isinstance(data, dict) else None
+                        # sometimes API returns rows at top level
+                        if rows is None and isinstance(j.get('rows'), list):
+                            rows = j.get('rows')
+                    if rows:
+                        for row in rows:
+                            try:
+                                std_no = (row.get('standardNumDeal') or row.get('standardNum') or '').strip()
+                                name = (row.get('standardName') or '').strip()
+                                has_pdf = bool(int(row.get('hasPdf', 0))) if row.get('hasPdf') is not None else False
+                                meta = row
+                                items.append(Standard(std_no=std_no, name=name, publish=str(row.get('standardPubTime') or ''), implement='', status=str(row.get('standardStatus') or ''), has_pdf=has_pdf, source_meta=meta, sources=['ZBY']))
+                            except Exception:
+                                pass
+                        return items[:int(page_size)]
+            except Exception:
+                # fall through to HTML fallback
+                pass
+
+            # HTML fallback (existing behavior)
+            urls = [f"{self.base_url}/standardList", f"{self.base_url}/search", f"{self.base_url}/api/search"]
             resp_text = ""
             for u in urls:
                 try:
@@ -186,16 +236,5 @@ class ZBYSource:
             except Exception:
                 return None
         return None
-                        if self.client is not None:
-                            self.client.output_dir = Path(outdir)
-                    except Exception:
-                        pass
-                    try:
-                        if self.client is not None and hasattr(self.client, 'download_standard'):
-                            pdf_path = self.client.download_standard(item.source_meta)
-                            return Path(pdf_path) if pdf_path else None
-                    except Exception:
-                        pass
-                    return None
 
 
