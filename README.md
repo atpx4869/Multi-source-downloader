@@ -1,92 +1,50 @@
-# Standard Downloader
+# Standard Downloader (标准下载器)
 
-A desktop application for downloading Chinese standard documents from multiple sources.
+一款高效、安全的多源标准文档下载工具，支持国家标准、行业标准等多种来源的聚合搜索与批量下载。
 
-## Download
+## 主要特性
 
-Get the latest release from [GitHub Releases](https://github.com/atpx4869/Multi-source-downloader/releases):
+- **多源聚合**：集成多个权威标准平台（如 GBW, BY, ZBY 等），提供统一的搜索与下载接口。
+- **批量下载**：支持标准号批量导入，具备自动识别、去重及顺序下载功能。
+- **Win7 兼容**：基于 PySide2 (Qt5) 开发，深度优化以支持 Windows 7 及以上系统。
+- **隐私脱敏**：日志系统自动屏蔽敏感请求 URL，保护访问路径不被泄露。
+- **本地 OCR**：内置轻量化本地 OCR 引擎，减少对外部接口的依赖，提升识别速度。
+- **实时日志**：提供详细的执行日志与下载进度反馈，支持失败任务汇总。
 
-- **StandardDownloader-x64.exe** - For 64-bit Windows (recommended)
-- **StandardDownloader-x86.exe** - For 32-bit Windows
+## 快速开始
 
-## Features
+### 运行程序
+1. 从 [GitHub Releases](https://github.com/atpx4869/Multi-source-downloader/releases) 下载最新的 Release 压缩包。
+2. 解压后运行 `StandardDownloader.exe` 即可开始使用。
 
-- Multi-source aggregation (GBW, BY, ZBY)
-- Batch download support
-- Export to CSV
-- Real-time download logs
-- Source connectivity detection
+### 批量下载
+点击界面上的“批量下载”按钮，在弹出的对话框中每行输入一个标准号（支持带空格的标准号，如 `GB 18584-2024`），点击“开始下载”即可。
 
-## Requirements
+## 开发与构建
 
-- Windows 10 or later
-- No Python installation required
-
-## Build from Source
-
-```bash
-pip install -r requirements.txt
-pip install pyinstaller
-pyinstaller --onefile --windowed desktop_app.py
-```
-
-## License
-
-MIT
-
-## 项目结构
-
-```
-.
-├── desktop_app.py          # 主应用（PySide6 GUI）
-├── core/                   # 核心业务逻辑
-│   ├── __init__.py
-│   ├── aggregated_downloader.py    # 多源聚合下载器
-│   ├── by_download.py      # BY 源下载模块
-│   ├── by_source.py        # BY 源连接模块
-│   ├── gbw_download.py     # GBW 源下载模块
-│   ├── gbw_source.py       # GBW 源连接模块
-│   ├── standard_downloader.py      # 标准下载基类
-│   ├── zby_download.py     # ZBY 源下载模块
-│   └── zby_source.py       # ZBY 源连接模块
-├── ppllocr/                # OCR 支持库
-├── requirements.txt        # Python 依赖
-├── README.md              # 本文件
-└── README_DESKTOP.md      # 桌面应用详细说明
-```
-
-## 核心特性
-
-### 📊 多源聚合
-- **GBW**：国家标准官方库
-- **BY**：内部系统数据源
-- **ZBY**：标准云开放平台
-
-### 🔗 源连通性检测
-- 自动检测各数据源可用状态
-- 实时显示源连通情况
-- 搜索时智能跳过不可用源
-
-### 💻 现代化界面
-- PySide6 跨平台 GUI
-- 实时日志面板
-- 快速路径设置
-- 搜索结果 CSV 导出
-
-## 技术栈
-
-- **GUI 框架**：PySide6（Qt6 Python 绑定）
-- **数据处理**：pandas
-- **并发处理**：Python threading + Qt signals/slots
-- **网络请求**：requests, urllib3
-- **OCR 支持**：ppllocr
-
-## 依赖
+若需从源码构建，建议使用 Python 3.8 环境以确保最佳的系统兼容性。
 
 ```bash
-pip install -r requirements.txt
+# 安装依赖
+pip install -r requirements_win7.txt
+
+# 运行应用
+python desktop_app.py
+
+# 打包 (Windows)
+pyinstaller StandardDownloader_Win7.spec
 ```
 
-## 许可证
+## 隐私说明
 
-MIT License - 详见 LICENSE 文件（如存在）
+本程序在设计上优先考虑安全性：
+- **日志脱敏**：所有输出到界面的网络请求链接均已通过正则替换为 `[URL]`。
+- **无追踪**：程序不收集任何用户信息，所有下载的标准文档均保存在本地 `downloads` 目录下。
+
+## 免责声明
+
+本工具仅供学习和研究使用。用户在使用本工具下载文档时，应遵守相关法律法规及各平台的使用协议。作者不对因使用本工具而产生的任何法律纠纷承担责任。
+
+## 开源协议
+
+[MIT License](LICENSE)
