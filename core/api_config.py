@@ -32,6 +32,10 @@ class APIConfig:
         self.verify_ssl: bool = False  # 是否验证 SSL（VPS）
         self.max_retries: int = 3  # 搜索失败重试次数
         self.retry_delay: int = 2  # 重试延迟（秒）
+        # 性能优化选项
+        self.parallel_search: bool = True  # 是否并行搜索（推荐）
+        self.parallel_download: bool = False  # 是否并行下载
+        self.download_workers: int = 3  # 并行下载线程数（2-5）
         
     def load(self) -> bool:
         """从文件加载配置"""
@@ -71,6 +75,9 @@ class APIConfig:
             "verify_ssl": self.verify_ssl,
             "max_retries": self.max_retries,
             "retry_delay": self.retry_delay,
+            "parallel_search": self.parallel_search,
+            "parallel_download": self.parallel_download,
+            "download_workers": self.download_workers,
         }
     
     def _apply_dict(self, data: Dict[str, Any]) -> None:
@@ -101,6 +108,12 @@ class APIConfig:
             self.max_retries = int(data["max_retries"])
         if "retry_delay" in data:
             self.retry_delay = int(data["retry_delay"])
+        if "parallel_search" in data:
+            self.parallel_search = bool(data["parallel_search"])
+        if "parallel_download" in data:
+            self.parallel_download = bool(data["parallel_download"])
+        if "download_workers" in data:
+            self.download_workers = int(data["download_workers"])
     
     def update(self, **kwargs) -> None:
         """更新配置值"""

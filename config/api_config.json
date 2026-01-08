@@ -12,5 +12,8 @@
   "search_limit": 200,
   "verify_ssl": false,
   "max_retries": 5,
-  "retry_delay": 2
+  "retry_delay": 2,
+  "parallel_search": true,
+  "parallel_download": false,
+  "download_workers": 3
 }
