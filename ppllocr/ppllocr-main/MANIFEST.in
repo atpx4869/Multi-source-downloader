@@ -1,3 +1,0 @@
-include ppllocr/assets/*.onnx
-include README.md
-include LICENSE
