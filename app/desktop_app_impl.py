@@ -1889,6 +1889,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Web应用线程
         self.web_thread = None
         self.web_server_running = False
+        self.web_server_event = threading.Event()  # 用于线程间信号
 
         # 创建菜单栏
         menubar = self.menuBar()
@@ -2820,33 +2821,51 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # 如果web服务器未启动，启动它
         if not self.web_server_running:
+            self.web_server_event.clear()
             self.web_thread = threading.Thread(target=self._run_web_server, daemon=True)
             self.web_thread.start()
             self.append_log("🌐 Web应用启动中... (http://localhost:5000)")
-            QtWidgets.QMessageBox.information(self, "Web应用", "Web应用已在后台启动\n访问地址: http://localhost:5000\n系统将自动打开浏览器")
-        
-        # 在浏览器中打开web应用
-        time.sleep(1)  # 给服务器启动的时间
-        try:
-            webbrowser.open("http://localhost:5000")
-            self.append_log("✅ Web应用已打开浏览器")
-        except Exception as e:
-            self.append_log(f"❌ 打开浏览器失败: {e}")
+            
+            # 等待服务器启动完成（超时10秒）
+            if self.web_server_event.wait(timeout=10):
+                # 服务器启动成功
+                QtWidgets.QMessageBox.information(self, "Web应用", "Web应用已启动\n访问地址: http://localhost:5000")
+                try:
+                    webbrowser.open("http://localhost:5000")
+                    self.append_log("✅ Web应用已打开浏览器")
+                except Exception as e:
+                    self.append_log(f"⚠️ 打开浏览器失败，请手动访问 http://localhost:5000: {e}")
+            else:
+                # 服务器启动失败
+                QtWidgets.QMessageBox.warning(self, "Web应用", "Web应用启动失败，请查看日志")
+        else:
+            # 服务器已在运行
+            try:
+                webbrowser.open("http://localhost:5000")
+                self.append_log("✅ Web应用已打开浏览器")
+            except Exception as e:
+                self.append_log(f"⚠️ 打开浏览器失败: {e}")
 
     def _run_web_server(self):
         """在后台线程中运行Flask web服务器"""
         try:
             from web_app.web_app import app
-            self.web_server_running = True
             self.append_log("🚀 Web服务器启动...")
             # 禁用Flask日志输出到控制台，避免干扰
             import logging
             log = logging.getLogger('werkzeug')
             log.setLevel(logging.ERROR)
+            
+            self.web_server_running = True
+            self.web_server_event.set()  # 信号：服务器已启动
+            self.append_log("✓ Web服务器已启动在 http://127.0.0.1:5000")
+            
             app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
         except Exception as e:
             self.append_log(f"❌ Web服务器启动失败: {e}")
             self.web_server_running = False
+            if not self.web_server_event.is_set():
+                self.web_server_event.set()  # 即使失败也要设置事件，避免主线程一直等待
 
     def update_path_display(self):
         """更新路径显示"""
