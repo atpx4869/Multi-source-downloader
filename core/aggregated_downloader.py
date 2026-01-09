@@ -313,7 +313,23 @@ class AggregatedDownloader:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         logs: list[str] = []
         seen_item: set[str] = set()
-
+        
+        # 检查缓存和同名文件处理
+        cached_path = self.output_dir / item.filename()
+        if cached_path.exists():
+            file_size = cached_path.stat().st_size
+            if file_size > 0:
+                # 文件存在且大小>0，使用缓存
+                logs.append(f"✅ 缓存命中: {cached_path} (大小: {file_size} bytes)")
+                return str(cached_path), logs
+            else:
+                # 文件存在但大小为0（可能是下载中断），删除后重新下载
+                logs.append(f"⚠️  检测到不完整文件: {cached_path} (大小: 0 bytes)，删除后重新下载")
+                try:
+                    cached_path.unlink()
+                except Exception as e:
+                    logs.append(f"❌ 删除旧文件失败: {e}")
+        
         def filtered_cb(line: str):
             if not isinstance(line, str):
                 return
@@ -386,8 +402,18 @@ class AggregatedDownloader:
                     for line in extra_logs:
                         emit(line)
                 if path:
-                    emit(f"{src.name}: 成功 -> {path}")
-                    return path, logs
+                    # 检查是新下载还是覆盖了旧文件
+                    if isinstance(path, str):
+                        path_obj = Path(path)
+                    else:
+                        path_obj = path
+                    
+                    if path_obj.exists():
+                        file_size = path_obj.stat().st_size
+                        emit(f"{src.name}: 成功 -> {path} (大小: {file_size} bytes)")
+                    else:
+                        emit(f"{src.name}: 成功 -> {path}")
+                    return str(path), logs
                 else:
                     emit(f"{src.name}: 未获取到文件，尝试下一个源")
             except Exception as exc:

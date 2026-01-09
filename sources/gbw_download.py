@@ -51,6 +51,7 @@ def prewarm_ocr():
         import numpy as np
         if int(np.__version__.split('.')[0]) >= 2:
             # print("NumPy version >= 2.0 detected, skipping PPLL OCR to avoid crash.")
+            _OCR_PREWARMED = True
             return
     except Exception:
         pass
@@ -59,19 +60,30 @@ def prewarm_ocr():
     try:
         import onnxruntime
     except (Exception, SystemError, ImportError):
+        _OCR_PREWARMED = True
         return
 
     try:
         from ppllocr import OCR
         if _ppll_ocr_instance is None:
             _ppll_ocr_instance = OCR()
+            # 验证OCR对象有效性
+            if not callable(getattr(_ppll_ocr_instance, 'classification', None)):
+                _ppll_ocr_instance = None
+                _OCR_PREWARMED = True
+                return
             # 预热推理一次，让 ONNX Runtime 加载库
-            dummy = Image.new('RGB', (100, 40), color=(255, 255, 255))
-            buf = io.BytesIO()
-            dummy.save(buf, format='JPEG')
-            _ppll_ocr_instance.classification(buf.getvalue())
-    except (Exception, SystemError, ImportError):
-        pass
+            try:
+                dummy = Image.new('RGB', (100, 40), color=(255, 255, 255))
+                buf = io.BytesIO()
+                dummy.save(buf, format='JPEG')
+                _ppll_ocr_instance.classification(buf.getvalue())
+            except Exception:
+                # 预热失败也没关系，标记为已预热
+                pass
+    except (Exception, SystemError, ImportError) as e:
+        # OCR初始化失败，设为None以后续安全跳过
+        _ppll_ocr_instance = None
     finally:
         _OCR_PREWARMED = True
 
@@ -229,6 +241,10 @@ def ppll_ocr(img_bytes: bytes) -> str:
             _ppll_ocr_instance = OCR()
         ocr = _ppll_ocr_instance
         
+        # 检查ocr对象是否有效 - 防止NoneType错误
+        if ocr is None or not callable(getattr(ocr, 'classification', None)):
+            return ""
+        
         # 1. 先尝试原始图片，使用标准置信度 (最快)
         text = _normalize_text(ocr.classification(img_bytes, conf=0.2, iou=0.45))
         if text:
@@ -241,6 +257,11 @@ def ppll_ocr(img_bytes: bytes) -> str:
             text = _normalize_text(ocr.classification(buf, conf=0.15, iou=0.45))
             if text:
                 return text[:4] if len(text) >= 4 else ""
+    except TypeError as e:
+        # 捕获"'NoneType' object is not callable"错误
+        if "not callable" in str(e):
+            return ""
+        raise
     except Exception:
         return ""
     return ""
@@ -319,8 +340,36 @@ def get_hcno(std_id: str) -> str:
 
 
 def sanitize_filename(name: str) -> str:
-    cleaned = re.sub(r'[\\/:*?"<>|]', "_", name)
-    return cleaned.strip() or "download"
+    """
+    清理文件名：移除HTML标签、HTML实体、特殊字符等
+    """
+    if not name:
+        return "download"
+    
+    # 1. 移除所有HTML标签 <...>
+    safe = re.sub(r'<[^>]+>', '', name)
+    
+    # 2. 解码HTML实体 &#123; &nbsp; 等
+    import html as html_module
+    try:
+        safe = html_module.unescape(safe)
+    except Exception:
+        pass
+    
+    # 3. 移除不能用于文件名的特殊字符 \ / : * ? " < > |
+    safe = re.sub(r'[\\/:*?"<>|]', '_', safe)
+    
+    # 4. 多个下划线或空格合并为一个
+    safe = re.sub(r'[\s_]+', ' ', safe)
+    
+    # 5. 移除开头和结尾的空格、下划线、点
+    safe = safe.strip('. _')
+    
+    # 6. 最多保留100字符（防止文件名过长）
+    if len(safe) > 100:
+        safe = safe[:100].rstrip('. _')
+    
+    return safe or "download"
 
 
 def fetch_captcha(session: requests.Session, show_url: str, out_file: Path) -> bytes:

@@ -20,6 +20,9 @@ _STD_CODE_SLASH_RE = re.compile(r'([A-Z])\s*/\s*([A-Z])')
 class GBWSource:
     """GBW (国标委) Data Source"""
     
+    # 类变量：所有实例共享的PDF检测缓存（避免重复访问详情页）
+    _pdf_check_cache = {}  # {item_id: has_pdf}
+    
     def __init__(self):
         self.name = "GBW"
         self.priority = 1
@@ -55,32 +58,156 @@ class GBWSource:
         
         return cleaned
     
+    def _check_pdf_available(self, item_id: str, hcno: str = "") -> bool:
+        """
+        三层PDF可用性检测（分级判定模式）
+        
+        第一层：缓存检查 - 避免重复访问详情页
+        第二层：启发式判定 - 根据不同按钮类型分级判定
+        第三层：保守降级 - 无法确定时返回False
+        
+        按钮类型判定（可靠性递减）：
+        1. ck_btn + xz_btn  → True（新版标准，可信度最高 ✅✅✅）
+        2. openpdf          → True（中等可信度 ⚠️⚠️）
+        3. data-value HCNO  → True（中等可信度 ⚠️⚠️）
+        4. 版权限制提示     → False（黑名单 ❌）
+        5. 都没有           → False（保守判定 ⚠️）
+        """
+        if not item_id:
+            return False
+        
+        # 第一层：缓存检查（类变量，所有实例共享）
+        cache_key = hcno if hcno else item_id
+        if cache_key in GBWSource._pdf_check_cache:
+            return GBWSource._pdf_check_cache[cache_key]
+        
+        try:
+            # 如果没有传入HCNO，先从旧版详情页获取（但用较短的超时）
+            if not hcno:
+                try:
+                    hcno = self._get_hcno(item_id)
+                except Exception:
+                    hcno = None  # 获取HCNO失败就跳过
+            
+            # 构建URL优先级列表（优先使用HCNO访问新版API）
+            url_attempts = []
+            if hcno:
+                # 优先：新版API（更准确，包含版权信息）
+                url_attempts.append((f"https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno={hcno}", "newGbInfo"))
+            # 备选：旧版详情页
+            url_attempts.extend([
+                (f"https://std.samr.gov.cn/gb/search/gbDetailed?id={item_id}", "gbDetailed"),
+                (f"https://openstd.samr.gov.cn/gb/search/gbDetailed?id={item_id}", "gbDetailed"),
+            ])
+            
+            text = None
+            for url, url_type in url_attempts:
+                try:
+                    # 搜索时用较短的超时（5秒）
+                    resp = self.session.get(url, timeout=5, proxies={"http": None, "https": None})
+                    if resp.status_code == 200:
+                        resp.encoding = 'utf-8'
+                        text = resp.text
+                        break
+                except Exception:
+                    continue
+            
+            if not text:
+                GBWSource._pdf_check_cache[cache_key] = False
+                return False
+            
+            # 第二层：启发式判定
+            
+            # 黑名单检查：版权限制提示（最高优先级，一旦发现直接返回False）
+            no_read_keywords = [
+                "本系统暂不提供在线阅读",
+                "版权保护问题",
+                "涉及版权保护",
+                "暂不提供",
+                "无预览权限",
+                "不提供下载",
+                "购买正式标准出版物",  # 新增：用户提供的页面中的关键词
+                "联系中国标准出版社",    # 新增：明确要求购买
+                "需要购买",
+                "已下架",
+                "您所查询的标准系统尚未收录",
+                "将在发布后20个工作日内公开",
+                "陆续完成公开",
+                "标准废止"
+            ]
+            
+            for keyword in no_read_keywords:
+                if keyword in text:
+                    GBWSource._pdf_check_cache[cache_key] = False
+                    return False
+                
+                # 白名单检查：按可靠性递减
+                
+                # 等级1：ck_btn + xz_btn（新版GBW，可信度最高）
+                # 这类按钮表示可以在线预览和下载，属于新版标准
+                if 'ck_btn' in text or '在线预览' in text:
+                    if 'xz_btn' in text or '下载标准' in text:
+                        GBWSource._pdf_check_cache[cache_key] = True
+                        return True
+                
+                # 等级2：openpdf（旧版GBW，但相对可信）
+                # 这表示可以通过PDF查看器打开文档
+                if 'openpdf' in text or 'pdfPreview' in text or 'pdfpreview' in text:
+                    GBWSource._pdf_check_cache[cache_key] = True
+                    return True
+                
+                # 等级3：data-value HCNO（有HCNO通常意味着可以访问）
+                if 'data-value=' in text:
+                    import re
+                    hcno_match = re.search(r'data-value=["\']([A-F0-9]{32})["\']', text, re.IGNORECASE)
+                    if hcno_match:
+                        GBWSource._pdf_check_cache[cache_key] = True
+                        return True
+                
+                # 等级4：只有在线预览按钮（不一定能下载）
+                if 'ck_btn' in text or '在线预览' in text:
+                    # 只有预览没有下载时，保守返回False
+                    GBWSource._pdf_check_cache[cache_key] = False
+                    return False
+                
+                # 都没找到：返回False（保守判定）
+                GBWSource._pdf_check_cache[cache_key] = False
+                return False
+            
+        except Exception:
+            # 访问异常时，保守起见返回False
+            GBWSource._pdf_check_cache[cache_key] = False
+            return False
+    
     def search(self, keyword: str, page: int = 1, page_size: int = 20, **kwargs) -> List[Standard]:
         """Search standards from GBW API"""
         items = []
         
-        # 尝试多种关键词组合
-        keywords_to_try = [keyword]
-        if '/' in keyword or ' ' in keyword:
-            keywords_to_try.append(keyword.replace('/', '').replace(' ', ''))
-        if '-' in keyword:
-            keywords_to_try.append(keyword.split('-')[0].strip())
-            
+        # 优化：只尝试原始关键词，快速失败，不重试
         rows = []
-        for kw in keywords_to_try:
+        try:
+            search_url = f"{self.base_url}/gb/search/gbQueryPage"
+            params = {
+                "searchText": keyword,
+                "pageNumber": page,
+                "pageSize": page_size
+            }
+            # 搜索时不重试：retries=0，快速失败
+            j = call_api(self.session, 'GET', search_url, params=params, timeout=8, retries=0)
+            rows = find_rows(j)
+        except Exception:
+            pass
+        
+        # 如果原始关键词没结果，尝试去除空格/斜杠的变种（但也不重试）
+        if not rows:
             try:
-                search_url = f"{self.base_url}/gb/search/gbQueryPage"
-                params = {
-                    "searchText": kw,
-                    "pageNumber": page,
-                    "pageSize": page_size
-                }
-                j = call_api(self.session, 'GET', search_url, params=params, timeout=15)
-                rows = find_rows(j)
-                if rows:
-                    break
+                if '/' in keyword or ' ' in keyword:
+                    kw_clean = keyword.replace('/', '').replace(' ', '')
+                    params['searchText'] = kw_clean
+                    j = call_api(self.session, 'GET', search_url, params=params, timeout=8, retries=0)
+                    rows = find_rows(j)
             except Exception:
-                continue
+                pass
                 
         try:
             for row in rows:
@@ -88,9 +215,27 @@ class GBWSource:
                     std_code = self._parse_std_code(row.get("C_STD_CODE", ""))
                     std_name = self._clean_text(row.get("C_C_NAME", ""))
                     
-                    # Check if PDF is available (current or upcoming standards have PDF)
+                    # Check if PDF is available (现行/即将实施 状态，且缓存有记录)
                     status = row.get("STATE", "")
-                    has_pdf = "现行" in status or "即将实施" in status
+                    status_ok = "现行" in status or "即将实施" in status
+                    
+                    # 获取item_id和hcno（用于缓存查询）
+                    item_id = row.get("id", "")
+                    hcno = row.get("HCNO", "")
+                    cache_key = hcno if hcno else item_id
+                    
+                    # 搜索中的快速判定逻辑：
+                    # 1. 如果缓存已有结果，使用缓存值
+                    # 2. 如果状态不是"现行"或"即将实施"，标记为无文本
+                    # 3. 如果状态OK但缓存未命中，标记为有文本（后续异步验证）
+                    if cache_key in GBWSource._pdf_check_cache:
+                        has_pdf = GBWSource._pdf_check_cache[cache_key]
+                    elif not status_ok:
+                        has_pdf = False
+                    else:
+                        # 状态OK但缓存未命中 -> 标记为有文本，后续异步验证会修正
+                        has_pdf = True
+
                     
                     std = Standard(
                         std_no=std_code,
@@ -100,7 +245,7 @@ class GBWSource:
                         status=status,
                         has_pdf=has_pdf,
                         source_meta={
-                            "id": row.get("id", ""),
+                            "id": item_id,
                             "hcno": row.get("HCNO", "")
                         },
                         sources=["GBW"]
@@ -217,6 +362,9 @@ class GBWSource:
             from ppllocr import OCR
             try:
                 ocr = OCR()
+                # 验证OCR对象是否有效（有callable的classification方法）
+                if not callable(getattr(ocr, 'classification', None)):
+                    ocr = None
             except Exception as e:
                 emit(f"GBW: OCR 模型加载失败: {e}")
                 ocr = None
@@ -304,7 +452,7 @@ class GBWSource:
                         return None, logs
 
                 emit("GBW: 已获取验证码图片，开始 OCR 识别")
-                if ocr:
+                if ocr and callable(getattr(ocr, 'classification', None)):
                     try:
                         code = ocr.classification(img_bytes)
                         code = code.strip()

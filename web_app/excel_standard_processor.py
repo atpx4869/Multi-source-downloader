@@ -6,11 +6,17 @@ Excel标准号处理工具
 1. 读取Excel中的标准号
 2. 如果不带年代号，返回现行标准的完整编号和名称
 3. 如果带年代号，返回该标准的名称
+
+优化：
+1. 首次使用时测试三个源的查询速度
+2. 根据速度排序，优先使用最快的源
+3. 若最快的源未找到结果，使用ZBY兜底
 """
 import re
 import sys
+import time
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, List
 import pandas as pd
 
 # 添加项目路径（项目根目录）
@@ -28,6 +34,68 @@ class StandardProcessor:
         self.router = APIRouter()
         # 标准号正则：匹配 GB/T 3324 或 GB/T 3324-2024
         self.pattern = re.compile(r'^([A-Z/]+\s*\d+)(?:-(\d{4}))?$', re.IGNORECASE)
+        
+        # 源速度统计（初始化为None，首次使用时计算）
+        self.source_speeds: Optional[Dict[SourceType, float]] = None
+        self.source_order: Optional[List[SourceType]] = None
+        self.speed_test_keyword = "GB/T 3324"  # 用于速度测试的标准号
+        # 结果缓存：std_no_normalized -> (full_std_no, name, status)
+        self.result_cache: Dict[str, Tuple[str, str, str]] = {}
+
+    def is_gb_like(self, std_no: str) -> bool:
+        """判断是否为 GB 或 GB/T 标准"""
+        return bool(re.match(r'^GB\s*/?T?\s*', std_no.strip(), re.IGNORECASE))
+    
+    def _benchmark_sources(self) -> None:
+        """
+        测试三个源的查询速度并排序
+        首次调用时执行一次，结果缓存
+        """
+        if self.source_speeds is not None:
+            return  # 已经测试过
+        
+        print("\n" + "="*60)
+        print("🏃 测试源查询速度（首次运行）...")
+        print("="*60)
+        
+        self.source_speeds = {}
+        
+        # 对每个源进行速度测试
+        for source_type in [SourceType.GBW, SourceType.BY, SourceType.ZBY]:
+            try:
+                api = self.router.get_api(source_type)
+                if not api:
+                    print(f"⚠️  {source_type.value} 未启用，跳过")
+                    self.source_speeds[source_type] = float('inf')
+                    continue
+                
+                start_time = time.time()
+                response = api.search(self.speed_test_keyword, limit=5)
+                elapsed = time.time() - start_time
+                
+                self.source_speeds[source_type] = elapsed
+                status = "✓ 可用" if response.count > 0 else "⚠️  无结果"
+                print(f"  {source_type.value:3s}: {elapsed:.2f}s {status}")
+                
+            except Exception as e:
+                self.source_speeds[source_type] = float('inf')
+                print(f"  {source_type.value:3s}: ❌ 异常 - {str(e)[:50]}")
+        
+        # 按速度排序（从快到慢）
+        self.source_order = sorted(
+            [st for st in self.source_speeds.keys() if self.source_speeds[st] != float('inf')],
+            key=lambda st: self.source_speeds[st]
+        )
+        
+        if not self.source_order:
+            self.source_order = [SourceType.GBW, SourceType.BY, SourceType.ZBY]
+        
+        print(f"\n优先级顺序（从快到慢）:")
+        for i, st in enumerate(self.source_order, 1):
+            speed = self.source_speeds[st]
+            if speed != float('inf'):
+                print(f"  {i}. {st.value} ({speed:.2f}s)")
+        print("="*60 + "\n")
     
     def has_year(self, std_no: str) -> bool:
         """
@@ -45,6 +113,7 @@ class StandardProcessor:
             return False
         return match.group(2) is not None
     
+    
     def normalize_std_no(self, std_no: str) -> str:
         """
         标准化标准号格式（去除多余空格等）
@@ -61,9 +130,81 @@ class StandardProcessor:
         std_no = re.sub(r'([A-Z/]+)\s*(\d+)', r'\1 \2', std_no, flags=re.IGNORECASE)
         return std_no
     
-    def search_current_standard(self, base_std_no: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def _search_by_priority(self, keyword: str, is_gb_like: bool, limit: int = 50) -> Tuple[List, Dict[str, float]]:
         """
-        搜索现行标准
+        按优先级顺序搜索（快速优先，失败则兜底）
+        
+        Args:
+            keyword: 搜索关键词
+            is_gb_like: 是否为 GB/GB T 标准
+            limit: 搜索结果限制
+            
+        Returns:
+            Tuple[标准列表, 耗时统计]
+        """
+        # 首次调用时进行速度测试
+        if self.source_speeds is None:
+            self._benchmark_sources()
+
+        all_standards = []
+        timings = {}
+
+        # 基于能力的动态优先级队列
+        ordered = [st for st in (self.source_order or []) if self.source_speeds.get(st, float('inf')) != float('inf')]
+        if not ordered:
+            return [], {}
+
+        if not is_gb_like:
+            # 行业标准（QB/T等）：先尝试快速源（BY/ZBY），如果都失败，自动加入 GBW 兜底
+            ordered_without_gbw = [st for st in ordered if st != SourceType.GBW]
+            gbw_available = self.source_speeds.get(SourceType.GBW, float('inf')) != float('inf')
+            if gbw_available:
+                # 在快速源之后加入 GBW 作为兜底
+                ordered = ordered_without_gbw + [SourceType.GBW]
+            else:
+                ordered = ordered_without_gbw
+        else:
+            # GB/GB T: 先最快，再强制插入 GBW（若存在且不是最快），再其余
+            fastest = ordered[0]
+            remaining = [st for st in ordered[1:] if st != SourceType.GBW]
+            gbw_available = self.source_speeds.get(SourceType.GBW, float('inf')) != float('inf')
+            if gbw_available and SourceType.GBW != fastest:
+                ordered = [fastest, SourceType.GBW] + remaining
+            else:
+                ordered = [fastest] + remaining
+
+        # 逐源尝试，找到即停
+        for source_type in ordered:
+            api = self.router.get_api(source_type)
+            if not api:
+                continue
+
+            try:
+                start_time = time.time()
+                response = api.search(keyword, limit=limit)
+                elapsed = time.time() - start_time
+                timings[source_type.value] = elapsed
+
+                if response.error:
+                    print(f"    ⚠️  {source_type.value} 搜索失败: {response.error}")
+                    continue
+
+                if response.count > 0:
+                    print(f"    ✓ {source_type.value} 找到 {response.count} 个结果 ({elapsed:.2f}s)")
+                    all_standards.extend(response.standards)
+                    break
+                else:
+                    print(f"    ⚠️  {source_type.value} 未找到结果 ({elapsed:.2f}s)")
+
+            except Exception as e:
+                print(f"    ⚠️  {source_type.value} 搜索异常: {str(e)[:50]}")
+                continue
+
+        return all_standards, timings
+    
+    def search_current_standard(self, base_std_no: str, is_gb_like: bool) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        搜索现行标准（使用优先级搜索）
         
         Args:
             base_std_no: 基础标准号（不带年代号）
@@ -73,19 +214,8 @@ class StandardProcessor:
         """
         print(f"  🔍 搜索标准: {base_std_no}")
         
-        # 尝试从多个源搜索
-        results = self.router.search_all(base_std_no, limit=50)
-        
-        # 收集所有结果
-        all_standards = []
-        for source_type, response in results.items():
-            if response.error:
-                print(f"    ⚠️  {source_type.value} 搜索失败: {response.error}")
-                continue
-            
-            if response.count > 0:
-                print(f"    ✓ {source_type.value} 找到 {response.count} 个结果")
-                all_standards.extend(response.standards)
+        # 使用优先级搜索（快速优先，按 GB/非GB 规则）
+        all_standards, timings = self._search_by_priority(base_std_no, is_gb_like=is_gb_like, limit=50)
         
         if not all_standards:
             return None, None, "未找到任何结果"
@@ -138,9 +268,9 @@ class StandardProcessor:
         print(f"    ✓ 找到现行标准: {std.std_no}")
         return std.std_no, std.name, None
     
-    def get_standard_name(self, std_no: str) -> Tuple[Optional[str], Optional[str]]:
+    def get_standard_name(self, std_no: str, is_gb_like: bool) -> Tuple[Optional[str], Optional[str]]:
         """
-        获取指定标准号的名称
+        获取指定标准号的名称（使用优先级搜索）
         
         Args:
             std_no: 标准号（带年代号）
@@ -150,18 +280,8 @@ class StandardProcessor:
         """
         print(f"  🔍 查询标准: {std_no}")
         
-        results = self.router.search_all(std_no, limit=10)
-        
-        # 收集所有结果
-        all_standards = []
-        for source_type, response in results.items():
-            if response.error:
-                print(f"    ⚠️  {source_type.value} 搜索失败: {response.error}")
-                continue
-            
-            if response.count > 0:
-                print(f"    ✓ {source_type.value} 找到 {response.count} 个结果")
-                all_standards.extend(response.standards)
+        # 使用优先级搜索（快速优先，按 GB/非GB 规则）
+        all_standards, timings = self._search_by_priority(std_no, is_gb_like=is_gb_like, limit=10)
         
         if not all_standards:
             return None, "未找到标准"
@@ -191,23 +311,35 @@ class StandardProcessor:
             return "", "", "空值"
         
         std_no = self.normalize_std_no(str(std_no))
+        cache_hit = self.result_cache.get(std_no)
+        if cache_hit:
+            return cache_hit
+        is_gb_like = self.is_gb_like(std_no)
         print(f"\n处理标准号: {std_no}")
         
         # 判断是否带年代号
         if self.has_year(std_no):
             # 带年代号，直接查询名称
             print(f"  → 检测到带年代号，直接查询标准名称")
-            name, error = self.get_standard_name(std_no)
+            name, error = self.get_standard_name(std_no, is_gb_like=is_gb_like)
             if error:
-                return std_no, "", f"查询失败: {error}"
-            return std_no, name or "", "成功"
+                result = (std_no, "", f"查询失败: {error}")
+                self.result_cache[std_no] = result
+                return result
+            result = (std_no, name or "", "成功")
+            self.result_cache[std_no] = result
+            return result
         else:
             # 不带年代号，查找现行标准
             print(f"  → 检测到不带年代号，查找现行标准")
-            full_std_no, name, error = self.search_current_standard(std_no)
+            full_std_no, name, error = self.search_current_standard(std_no, is_gb_like=is_gb_like)
             if error:
-                return std_no, "", f"查询失败: {error}"
-            return full_std_no or std_no, name or "", "成功"
+                result = (std_no, "", f"查询失败: {error}")
+                self.result_cache[std_no] = result
+                return result
+            result = (full_std_no or std_no, name or "", "成功")
+            self.result_cache[std_no] = result
+            return result
     
     def process_excel(
         self, 

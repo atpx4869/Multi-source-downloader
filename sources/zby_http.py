@@ -6,7 +6,7 @@ from .http_search import call_api, find_rows
 API_URL_DEFAULT = "https://login.bz.zhenggui.vip/bzy-api/org/std/search"
 
 
-def search_via_api(keyword: str, page: int = 1, page_size: int = 20, session: Optional[requests.Session] = None, api_url: str = API_URL_DEFAULT) -> List[Dict[str, Any]]:
+def search_via_api(keyword: str, page: int = 1, page_size: int = 20, session: Optional[requests.Session] = None, api_url: str = API_URL_DEFAULT, timeout: int = 10) -> List[Dict[str, Any]]:
     """Query ZBY JSON API and return list of rows (dicts).
 
     Returns empty list on failure.
@@ -34,7 +34,8 @@ def search_via_api(keyword: str, page: int = 1, page_size: int = 20, session: Op
         "time": "",
     }
 
-    j = call_api(session, 'POST', api_url, json_body=body, headers=headers, timeout=10)
+    # 搜索时不重试，快速失败
+    j = call_api(session, 'POST', api_url, json_body=body, headers=headers, timeout=timeout, retries=0)
     if j is None:
         return []
     rows = find_rows(j)

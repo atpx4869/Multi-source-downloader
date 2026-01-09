@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict
 import re
+import html as html_module
 
 
 def natural_key(s: str):
@@ -11,9 +12,35 @@ def natural_key(s: str):
 
 
 def sanitize_filename(name: str) -> str:
-    safe = re.sub(r'[\\/:*?"<>|]', "_", name or "")
-    safe = safe.strip() or "download"
-    return safe
+    """
+    清理文件名：移除HTML标签、HTML实体、特殊字符等
+    """
+    if not name:
+        return "download"
+    
+    # 1. 移除所有HTML标签 <...>
+    safe = re.sub(r'<[^>]+>', '', name)
+    
+    # 2. 解码HTML实体 &#123; &nbsp; 等
+    try:
+        safe = html_module.unescape(safe)
+    except Exception:
+        pass
+    
+    # 3. 移除不能用于文件名的特殊字符 \ / : * ? " < > |
+    safe = re.sub(r'[\\/:*?"<>|]', '_', safe)
+    
+    # 4. 多个下划线或空格合并为一个
+    safe = re.sub(r'[\s_]+', ' ', safe)
+    
+    # 5. 移除开头和结尾的空格、下划线、点
+    safe = safe.strip('. _')
+    
+    # 6. 最多保留100字符（防止文件名过长）
+    if len(safe) > 100:
+        safe = safe[:100].rstrip('. _')
+    
+    return safe or "download"
 
 
 @dataclass

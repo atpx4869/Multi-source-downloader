@@ -3,6 +3,8 @@
 API Router - API 路由和编排
 """
 from typing import Dict, List, Optional, Callable
+import concurrent.futures
+import functools
 from api.models import (
     SourceType, StandardInfo, SearchResponse, 
     DownloadResponse, DownloadStatus, HealthResponse, SourceHealth
@@ -15,6 +17,8 @@ from api.gbw_api import GBWSourceAPI
 
 # 优先级：优先使用可用性更好的源
 PRIORITY_ORDER = [SourceType.GBW, SourceType.BY, SourceType.ZBY]
+# 全局搜索超时（每个源）
+DEFAULT_SEARCH_TIMEOUT = 8
 
 
 class APIRouter:
@@ -90,12 +94,28 @@ class APIRouter:
         Returns:
             Dict[SourceType, SearchResponse]: 各源的搜索结果
         """
-        results = {}
-        for source in self.get_enabled_sources():
-            api = self.get_api(source)
-            if api:
-                results[source] = api.search(query, limit)
-        
+        results: Dict[SourceType, SearchResponse] = {}
+        enabled = self.get_enabled_sources()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(enabled) or 1) as executor:
+            future_map = {
+                executor.submit(api.search, query, limit): source
+                for source in enabled
+                for api in [self.get_api(source)]
+                if api
+            }
+
+            for fut, source in future_map.items():
+                try:
+                    results[source] = fut.result(timeout=DEFAULT_SEARCH_TIMEOUT)
+                except concurrent.futures.TimeoutError:
+                    resp = SearchResponse(source=source, query=query, count=0)
+                    resp.error = f"{source.value} 搜索超时({DEFAULT_SEARCH_TIMEOUT}s)"
+                    results[source] = resp
+                except Exception as e:
+                    resp = SearchResponse(source=source, query=query, count=0)
+                    resp.error = str(e)
+                    results[source] = resp
+
         return results
     
     def download(

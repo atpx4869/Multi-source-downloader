@@ -1,6 +1,6 @@
 {
   "mode": "local",
-  "local_output_dir": "downloads",
+  "local_output_dir": "F:/C、检验标准",
   "local_timeout": 30,
   "remote_base_url": "http://127.0.0.1:8000",
   "remote_timeout": 60,
@@ -9,11 +9,11 @@
     "by",
     "zby"
   ],
-  "search_limit": 200,
+  "search_limit": 89,
   "verify_ssl": false,
   "max_retries": 5,
-  "retry_delay": 2,
+  "retry_delay": 5,
   "parallel_search": true,
-  "parallel_download": false,
-  "download_workers": 3
+  "parallel_download": true,
+  "download_workers": 5
 }

@@ -3,6 +3,7 @@
 ZBY Source API - 正规宝 API 包装
 """
 import time
+import concurrent.futures
 from typing import Optional, Callable
 from api.base import BaseSourceAPI
 from api.models import (
@@ -36,19 +37,18 @@ class ZBYSourceAPI(BaseSourceAPI):
             elapsed_time=0.0
         )
         
+        if not self.source:
+            response.error = f"ZBY 源未初始化: {self.init_error}"
+            return response
+
+        def _do_search():
+            return self.source.search(query)
+
         try:
-            if not self.source:
-                response.error = f"ZBY 源未初始化: {self.init_error}"
-                return response
-            
-            # 调用源的搜索方法
-            standards = self.source.search(query)
-            
-            # 转换为统一格式
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                standards = executor.submit(_do_search).result(timeout=8)
             for std in standards[:limit]:
-                # 提取 standardId 如果有
                 source_meta = std.source_meta if isinstance(std.source_meta, dict) else {}
-                
                 info = StandardInfo(
                     std_no=std.std_no,
                     name=std.name,
@@ -60,14 +60,13 @@ class ZBYSourceAPI(BaseSourceAPI):
                     source_meta=source_meta
                 )
                 response.standards.append(info)
-            
             response.count = len(response.standards)
-            response.elapsed_time = time.time() - start_time
-            
+        except concurrent.futures.TimeoutError:
+            response.error = "ZBY 搜索超时(8s)"
         except Exception as e:
             response.error = str(e)
-            response.elapsed_time = time.time() - start_time
-        
+
+        response.elapsed_time = time.time() - start_time
         return response
     
     def download(
