@@ -1893,13 +1893,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 创建菜单栏
         menubar = self.menuBar()
-        
-        # 工具菜单
-        tools_menu = menubar.addMenu("🛠 工具")
-        
-        # Web应用菜单项
-        web_action = tools_menu.addAction("🌐 Web应用")
-        web_action.triggered.connect(self.open_web_app)
 
         central = QtWidgets.QWidget()
         central.setStyleSheet("background-color: #f8f9fa;")
@@ -1945,6 +1938,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_download_path.setWordWrap(False)
         path_op_layout.addWidget(lbl_path)
         path_op_layout.addWidget(self.lbl_download_path, 1)
+        
+        # Web应用按钮
+        self.btn_web_app = QtWidgets.QPushButton("🌐 Web应用")
+        self.btn_web_app.setMaximumWidth(70)
+        self.btn_web_app.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 8px;
+                font-weight: bold;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #229954;
+            }
+            QPushButton:pressed {
+                background-color: #1e8449;
+            }
+        """)
+        self.btn_web_app.clicked.connect(self.open_web_app)
+        path_op_layout.addWidget(self.btn_web_app)
         
         # 路径选择按钮 - 宽度调小防止遮挡
         self.btn_select_path = QtWidgets.QPushButton("🔍 选路径")
