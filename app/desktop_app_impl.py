@@ -2076,6 +2076,52 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 下载源选择由右侧复选框控制（移除下拉框）
         
+        # 队列管理按钮
+        self.btn_queue = QtWidgets.QPushButton("📥 队列")
+        self.btn_queue.setMaximumWidth(70)
+        self.btn_queue.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 8px;
+                font-weight: bold;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #d35400;
+            }
+            QPushButton:pressed {
+                background-color: #c0392b;
+            }
+        """)
+        self.btn_queue.clicked.connect(self.open_queue_dialog)
+        path_op_layout.addWidget(self.btn_queue)
+        
+        # 历史记录按钮
+        self.btn_history = QtWidgets.QPushButton("🕒 历史")
+        self.btn_history.setMaximumWidth(70)
+        self.btn_history.setStyleSheet("""
+            QPushButton {
+                background-color: #16a085;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 8px;
+                font-weight: bold;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #138d75;
+            }
+            QPushButton:pressed {
+                background-color: #117864;
+            }
+        """)
+        self.btn_history.clicked.connect(self.open_history_dialog)
+        path_op_layout.addWidget(self.btn_history)
+        
         # 设置按钮
         self.btn_settings = QtWidgets.QPushButton("⚙️ 设置")
         self.btn_settings.setMaximumWidth(70)
@@ -2884,6 +2930,40 @@ class MainWindow(QtWidgets.QMainWindow):
             dialog.exec()
         else:
             dialog.exec_()
+    
+    def open_queue_dialog(self):
+        """打开下载队列管理对话框"""
+        try:
+            from app.queue_dialog import QueueDialog
+            
+            dialog = QueueDialog(self)
+            # 兼容 PySide2 和 PySide6
+            if hasattr(dialog, 'exec'):
+                dialog.exec()
+            else:
+                dialog.exec_()
+        except Exception as e:
+            import traceback
+            self.append_log(f"❌ 打开队列管理失败: {e}")
+            self.append_log(traceback.format_exc())
+            QtWidgets.QMessageBox.warning(self, "错误", f"无法打开队列管理:\n{e}")
+    
+    def open_history_dialog(self):
+        """打开历史记录对话框"""
+        try:
+            from app.history_dialog import HistoryDialog
+            
+            dialog = HistoryDialog(self)
+            # 兼容 PySide2 和 PySide6
+            if hasattr(dialog, 'exec'):
+                dialog.exec()
+            else:
+                dialog.exec_()
+        except Exception as e:
+            import traceback
+            self.append_log(f"❌ 打开历史记录失败: {e}")
+            self.append_log(traceback.format_exc())
+            QtWidgets.QMessageBox.warning(self, "错误", f"无法打开历史记录:\n{e}")
 
     def _run_web_server(self):
         """在后台线程中运行Flask web服务器"""
