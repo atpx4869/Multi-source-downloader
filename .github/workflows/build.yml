@@ -11,8 +11,8 @@ env:
   VERSION: "4.0.0"
 
 jobs:
-  build-nuitka-win10:
-    name: "构建 Win10+ 版本 (Python 3.11 + Nuitka)"
+  build-pyinstaller-win10:
+    name: "构建 Win10+ 版本 (Python 3.11 + PyInstaller)"
     runs-on: windows-latest
     
     steps:
@@ -29,7 +29,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install nuitka ordered-set zstandard
+        pip install pyinstaller
       shell: pwsh
     
     - name: 创建必要的文件
@@ -45,19 +45,19 @@ jobs:
         python -c "from PIL import Image; img = Image.open('core/logo.png'); img.save('app.ico', format='ICO', sizes=[(256,256)]); print('✅ 图标转换成功')"
       shell: pwsh
     
-    - name: 使用 Nuitka 编译 (高性能原生版本)
+    - name: 使用 PyInstaller 编译
       run: |
-        Write-Host "🚀 开始 Nuitka 编译..." -ForegroundColor Cyan
-        python -m nuitka --onefile --standalone `
-          --windows-console-mode=disable `
-          --enable-plugin=pyside6 `
-          --windows-icon-from-ico=app.ico `
-          --include-data-file=core/logo.png=core/logo.png `
-          --include-data-file=app/.auth_cache=app/.auth_cache `
-          --output-dir=dist `
-          --output-filename=MultiSourceDownloader.exe `
+        Write-Host "🚀 开始 PyInstaller 编译..." -ForegroundColor Cyan
+        python -m PyInstaller --onefile --windowed `
+          --icon=app.ico `
+          --add-data "core/logo.png;core" `
+          --add-data "app/.auth_cache;app" `
+          --name=MultiSourceDownloader `
+          --distpath=dist `
+          --workpath=build `
+          --specpath=. `
           desktop_app.py
-        Write-Host "✅ Nuitka 编译完成！" -ForegroundColor Green
+        Write-Host "✅ PyInstaller 编译完成！" -ForegroundColor Green
       shell: pwsh
     
     - name: 获取构建信息
@@ -81,16 +81,16 @@ jobs:
         echo "## 构建信息" >> dist/VERSION_4.0.md
         echo "- **构建时间**: $env:BUILD_DATE" >> dist/VERSION_4.0.md
         echo "- **文件大小**: $env:BUILD_SIZE MB" >> dist/VERSION_4.0.md
-        echo "- **编译方式**: Nuitka (原生机器码)" >> dist/VERSION_4.0.md
+        echo "- **编译方式**: PyInstaller" >> dist/VERSION_4.0.md
         echo "- **Python 版本**: 3.11" >> dist/VERSION_4.0.md
         echo "- **操作系统**: Windows 10+" >> dist/VERSION_4.0.md
         echo "" >> dist/VERSION_4.0.md
         echo "## 核心特性" >> dist/VERSION_4.0.md
-        echo "- 启动极快: 1-2秒启动 (比 PyInstaller 快 60-70%)" >> dist/VERSION_4.0.md
-        echo "- 执行高效: 原生C速度 (比解释器快 150-300%)" >> dist/VERSION_4.0.md
+        echo "- 启动快速: 3-5秒启动" >> dist/VERSION_4.0.md
+        echo "- 执行稳定: 完整 Python 运行时" >> dist/VERSION_4.0.md
         echo "- 完整 UI: 支持 UTF-8 和 Emoji" >> dist/VERSION_4.0.md
-        echo "- 体积优化: 比 PyInstaller 小 30-40%" >> dist/VERSION_4.0.md
-        echo "- 安全稳定: 真正编译,不易误报" >> dist/VERSION_4.0.md
+        echo "- 兼容性好: 广泛测试和使用" >> dist/VERSION_4.0.md
+        echo "- 稳定可靠: 成熟的打包方案" >> dist/VERSION_4.0.md
         echo "" >> dist/VERSION_4.0.md
         echo "## 使用说明" >> dist/VERSION_4.0.md
         echo "1. 下载 MultiSourceDownloader.exe" >> dist/VERSION_4.0.md
@@ -105,7 +105,7 @@ jobs:
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
-        name: MultiSourceDownloader-v4.0-Nuitka-win64
+        name: MultiSourceDownloader-v4.0-PyInstaller-win64
         path: |
           dist/MultiSourceDownloader.exe
           dist/VERSION_4.0.md
@@ -131,8 +131,8 @@ jobs:
         Write-Host ""
       shell: pwsh
 
-  build-nuitka-win7:
-    name: "构建 Win7 兼容版本 (Python 3.8 + Nuitka)"
+  build-pyinstaller-win7:
+    name: "构建 Win7 兼容版本 (Python 3.8 + PyInstaller)"
     runs-on: windows-2019
     
     steps:
@@ -149,7 +149,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements_win7.txt
-        pip install nuitka ordered-set zstandard
+        pip install pyinstaller
       shell: pwsh
     
     - name: 创建必要的文件
@@ -165,19 +165,19 @@ jobs:
         python -c "from PIL import Image; img = Image.open('core/logo.png'); img.save('app.ico', format='ICO', sizes=[(256,256)]); print('✅ 图标转换成功')"
       shell: pwsh
     
-    - name: 使用 Nuitka 编译 (Win7 兼容版本)
+    - name: 使用 PyInstaller 编译 (Win7 兼容版本)
       run: |
-        Write-Host "🚀 开始 Nuitka 编译 (Win7 兼容)..." -ForegroundColor Cyan
-        python -m nuitka --onefile --standalone `
-          --windows-console-mode=disable `
-          --enable-plugin=pyside2 `
-          --windows-icon-from-ico=app.ico `
-          --include-data-file=core/logo.png=core/logo.png `
-          --include-data-file=app/.auth_cache=app/.auth_cache `
-          --output-dir=dist `
-          --output-filename=MultiSourceDownloader-Win7.exe `
+        Write-Host "🚀 开始 PyInstaller 编译 (Win7 兼容)..." -ForegroundColor Cyan
+        python -m PyInstaller --onefile --windowed `
+          --icon=app.ico `
+          --add-data "core/logo.png;core" `
+          --add-data "app/.auth_cache;app" `
+          --name=MultiSourceDownloader-Win7 `
+          --distpath=dist `
+          --workpath=build `
+          --specpath=. `
           desktop_app.py
-        Write-Host "✅ Nuitka 编译完成！" -ForegroundColor Green
+        Write-Host "✅ PyInstaller 编译完成！" -ForegroundColor Green
       shell: pwsh
     
     - name: 获取构建信息
@@ -201,17 +201,17 @@ jobs:
         echo "## 构建信息" >> dist/VERSION_4.0_Win7.md
         echo "- **构建时间**: $env:BUILD_DATE" >> dist/VERSION_4.0_Win7.md
         echo "- **文件大小**: $env:BUILD_SIZE MB" >> dist/VERSION_4.0_Win7.md
-        echo "- **编译方式**: Nuitka (原生机器码)" >> dist/VERSION_4.0_Win7.md
+        echo "- **编译方式**: PyInstaller" >> dist/VERSION_4.0_Win7.md
         echo "- **Python 版本**: 3.8" >> dist/VERSION_4.0_Win7.md
         echo "- **UI 框架**: PySide2" >> dist/VERSION_4.0_Win7.md
         echo "- **操作系统**: Windows 7+" >> dist/VERSION_4.0_Win7.md
         echo "" >> dist/VERSION_4.0_Win7.md
         echo "## 核心特性" >> dist/VERSION_4.0_Win7.md
-        echo "- 启动极快: 1-2秒启动" >> dist/VERSION_4.0_Win7.md
-        echo "- 执行高效: 原生C速度" >> dist/VERSION_4.0_Win7.md
+        echo "- 启动快速: 3-5秒启动" >> dist/VERSION_4.0_Win7.md
+        echo "- 执行稳定: 完整 Python 运行时" >> dist/VERSION_4.0_Win7.md
         echo "- 完整 UI: 支持 UTF-8 和 Emoji" >> dist/VERSION_4.0_Win7.md
         echo "- 兼容性强: 支持 Windows 7/8/10/11" >> dist/VERSION_4.0_Win7.md
-        echo "- 安全稳定: 真正编译,不易误报" >> dist/VERSION_4.0_Win7.md
+        echo "- 稳定可靠: 成熟的打包方案" >> dist/VERSION_4.0_Win7.md
         echo "" >> dist/VERSION_4.0_Win7.md
         echo "## 使用说明" >> dist/VERSION_4.0_Win7.md
         echo "1. 下载 MultiSourceDownloader-Win7.exe" >> dist/VERSION_4.0_Win7.md
@@ -227,7 +227,7 @@ jobs:
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
-        name: MultiSourceDownloader-v4.0-Win7-Nuitka
+        name: MultiSourceDownloader-v4.0-Win7-PyInstaller
         path: |
           dist/MultiSourceDownloader-Win7.exe
           dist/VERSION_4.0_Win7.md
