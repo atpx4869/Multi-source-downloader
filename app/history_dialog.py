@@ -120,10 +120,7 @@ class HistoryDialog(QtWidgets.QDialog):
     
     def create_download_history_tab(self) -> QtWidgets.QWidget:
         """创建下载历史标签页"""
-        widget = QtWsetStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
-        refresh_btn.setFixedHeight(32)
-        refresh_btn.setCursor(QtCore.Qt.PointingHandCursor)
-        refresh_btn.idgets.QWidget()
+        widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
         layout.setContentsMargins(10, 10, 10, 10)
         
@@ -131,6 +128,9 @@ class HistoryDialog(QtWidgets.QDialog):
         toolbar = QtWidgets.QHBoxLayout()
         
         refresh_btn = QtWidgets.QPushButton("🔄 刷新")
+        refresh_btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
+        refresh_btn.setFixedHeight(32)
+        refresh_btn.setCursor(QtCore.Qt.PointingHandCursor)
         refresh_btn.clicked.connect(self.load_download_history)
         toolbar.addWidget(refresh_btn)
         
