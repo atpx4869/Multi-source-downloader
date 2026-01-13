@@ -54,6 +54,7 @@ jobs:
           --windows-icon-from-ico=app.ico `
           --include-data-file=core/logo.png=core/logo.png `
           --include-data-file=app/.auth_cache=app/.auth_cache `
+          --assume-yes-for-downloads `
           --output-dir=dist `
           --output-filename=MultiSourceDownloader.exe `
           desktop_app.py
@@ -153,6 +154,7 @@ jobs:
           --windows-icon-from-ico=app.ico `
           --include-data-file=core/logo.png=core/logo.png `
           --include-data-file=app/.auth_cache=app/.auth_cache `
+          --assume-yes-for-downloads `
           --output-dir=dist `
           --output-filename=MultiSourceDownloader-Win7.exe `
           desktop_app.py

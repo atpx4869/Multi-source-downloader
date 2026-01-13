@@ -1983,7 +1983,7 @@ class MainWindow(QtWidgets.QMainWindow):
         path_op_layout.addWidget(self.lbl_download_path, 1)
         
         # Web应用按钮 - 改为 Excel 补全
-        self.btn_web_app = QtWidgets.QPushButton("📊 Excel补全")
+        self.btn_web_app = QtWidgets.QPushButton("📊 标准补全")
         self.btn_web_app.setMaximumWidth(70)
         self.btn_web_app.setStyleSheet("""
             QPushButton {
