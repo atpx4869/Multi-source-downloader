@@ -209,15 +209,71 @@ class ExcelDialog(QtWidgets.QDialog):
         self.btn_export_excel.setMaximumWidth(100)
         self.btn_export_excel.setEnabled(False)
         self.btn_export_excel.clicked.connect(self.export_excel)
+        self.btn_export_excel.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666;
+            }
+        """)
         
         self.btn_export_csv = QtWidgets.QPushButton("导出 CSV")
         self.btn_export_csv.setMaximumWidth(100)
         self.btn_export_csv.setEnabled(False)
         self.btn_export_csv.clicked.connect(self.export_csv)
+        self.btn_export_csv.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #1565C0;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666;
+            }
+        """)
         
         self.btn_close = QtWidgets.QPushButton("关闭")
         self.btn_close.setMaximumWidth(100)
         self.btn_close.clicked.connect(self.accept)
+        self.btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #757575;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #616161;
+            }
+            QPushButton:pressed {
+                background-color: #424242;
+            }
+        """)
         
         button_layout.addStretch()
         button_layout.addWidget(self.btn_export_excel)

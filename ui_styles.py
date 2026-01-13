@@ -185,6 +185,7 @@ CHECKBOX_STYLE = f"""
     QCheckBox {{
         color: {TEXT_COLOR};
         spacing: 5px;
+        font-size: 12px;
     }}
     QCheckBox::indicator {{
         width: 18px;
@@ -192,14 +193,35 @@ CHECKBOX_STYLE = f"""
     }}
     QCheckBox::indicator:unchecked {{
         background-color: {WHITE};
-        border: 1px solid {BORDER_COLOR};
-        border-radius: 2px;
+        border: 2px solid {BORDER_COLOR};
+        border-radius: 3px;
     }}
     QCheckBox::indicator:checked {{
         background-color: {PRIMARY_COLOR};
-        border: 1px solid {PRIMARY_COLOR};
-        border-radius: 2px;
-        color: {WHITE};
+        border: 2px solid {PRIMARY_COLOR};
+        border-radius: 3px;
+    }}
+"""
+
+# ==================== 使用缓存复选框样式（仅文字对勾） ====================
+CACHE_CHECKBOX_STYLE = f"""
+    QCheckBox {{
+        color: {TEXT_COLOR};
+        spacing: 8px;
+        font-size: 13px;
+        font-weight: 500;
+    }}
+    QCheckBox::indicator {{
+        width: 18px;
+        height: 18px;
+    }}
+    QCheckBox::indicator:unchecked {{
+        background-color: transparent;
+        border: none;
+    }}
+    QCheckBox::indicator:checked {{
+        background-color: transparent;
+        border: none;
     }}
 """
 

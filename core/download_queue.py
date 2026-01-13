@@ -57,6 +57,10 @@ class DownloadTask:
     @classmethod
     def from_dict(cls, data: Dict) -> 'DownloadTask':
         """从字典创建"""
+        # 处理字段名不匹配：数据库使用 'id'，dataclass 使用 'task_id'
+        if 'id' in data and 'task_id' not in data:
+            data = dict(data)  # 创建副本避免修改原始数据
+            data['task_id'] = data.pop('id')
         return cls(**data)
 
 
@@ -404,5 +408,10 @@ def get_queue_manager(max_workers: int = 3) -> DownloadQueueManager:
     """获取全局队列管理器实例"""
     global _queue_manager
     if _queue_manager is None:
+        _queue_manager = DownloadQueueManager(max_workers=max_workers)
+    elif _queue_manager.max_workers != max_workers:
+        # 如果worker数量不同，需要停止旧的并创建新的
+        if _queue_manager.is_running():
+            _queue_manager.stop(wait=False)
         _queue_manager = DownloadQueueManager(max_workers=max_workers)
     return _queue_manager

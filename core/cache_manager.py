@@ -278,6 +278,14 @@ class CacheManager:
         """按关键词搜索历史"""
         return self.db.search_history_by_keyword(keyword, limit)
     
+    def delete_search_history(self, keyword: str) -> bool:
+        """删除特定的搜索历史记录"""
+        try:
+            return self.db.delete_search_history(keyword)
+        except Exception as e:
+            print(f"删除搜索历史失败: {e}")
+            return False
+    
     # ==================== 缓存清理 ====================
     
     def clear_invalid_cache(self) -> int:

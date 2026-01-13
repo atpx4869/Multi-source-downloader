@@ -267,6 +267,19 @@ class Database:
             """, (f"%{keyword}%", limit))
             return [dict(row) for row in cursor.fetchall()]
     
+    def delete_search_history(self, keyword: str) -> bool:
+        """删除特定关键词的搜索历史"""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    DELETE FROM search_history 
+                    WHERE keyword = ?
+                """, (keyword,))
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"删除搜索历史失败: {e}")
+            return False
+    
     def clear_search_history(self, days: int = 30):
         """清空搜索历史（超过指定天数）"""
         with self.get_cursor() as cursor:

@@ -1565,9 +1565,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self.spin_remote_timeout.setStyleSheet(self._get_input_style())
         remote_layout.addWidget(self._create_form_row("请求超时:", self.spin_remote_timeout))
         
-        self.chk_verify_ssl = QtWidgets.QCheckBox("启用 SSL 验证 (HTTPS 推荐)")
+        self.chk_verify_ssl = QtWidgets.QCheckBox("🟢 启用 SSL 验证 (HTTPS 推荐)")
         self.chk_verify_ssl.setChecked(self.api_config.verify_ssl)
-        self.chk_verify_ssl.setStyleSheet("color: #34495e;")
+        self.chk_verify_ssl.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        def update_ssl_text():
+            self.chk_verify_ssl.setText("🟢 启用 SSL 验证 (HTTPS 推荐)" if self.chk_verify_ssl.isChecked() else "⚫ 启用 SSL 验证 (HTTPS 推荐)")
+        self.chk_verify_ssl.toggled.connect(update_ssl_text)
+        update_ssl_text()
         remote_layout.addWidget(self.chk_verify_ssl)
         
         layout.addWidget(self.remote_group)
@@ -1588,16 +1592,30 @@ class SettingsDialog(QtWidgets.QDialog):
         
         layout.addWidget(self._create_section_header("📡 启用的数据源"))
         
-        self.chk_gbw = QtWidgets.QCheckBox("✓ GBW (国家标准平台)")
-        self.chk_by = QtWidgets.QCheckBox("✓ BY (内部系统)")
-        self.chk_zby = QtWidgets.QCheckBox("✓ ZBY (标准云)")
+        self.chk_gbw = QtWidgets.QCheckBox("🟢 GBW (国家标准平台)")
+        self.chk_by = QtWidgets.QCheckBox("🟢 BY (内部系统)")
+        self.chk_zby = QtWidgets.QCheckBox("🟢 ZBY (标准云)")
         
         self.chk_gbw.setChecked("gbw" in self.api_config.enable_sources)
         self.chk_by.setChecked("by" in self.api_config.enable_sources)
         self.chk_zby.setChecked("zby" in self.api_config.enable_sources)
         
+        # 添加灯泡切换功能
+        def update_gbw_settings():
+            self.chk_gbw.setText("🟢 GBW (国家标准平台)" if self.chk_gbw.isChecked() else "⚫ GBW (国家标准平台)")
+        def update_by_settings():
+            self.chk_by.setText("🟢 BY (内部系统)" if self.chk_by.isChecked() else "⚫ BY (内部系统)")
+        def update_zby_settings():
+            self.chk_zby.setText("🟢 ZBY (标准云)" if self.chk_zby.isChecked() else "⚫ ZBY (标准云)")
+        self.chk_gbw.toggled.connect(update_gbw_settings)
+        self.chk_by.toggled.connect(update_by_settings)
+        self.chk_zby.toggled.connect(update_zby_settings)
+        update_gbw_settings()
+        update_by_settings()
+        update_zby_settings()
+        
         for chk in [self.chk_gbw, self.chk_by, self.chk_zby]:
-            chk.setStyleSheet("color: #34495e;")
+            chk.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
             layout.addWidget(chk)
         
         return group
@@ -1652,16 +1670,24 @@ class SettingsDialog(QtWidgets.QDialog):
         
         layout.addWidget(self._create_section_header("⚡ 性能优化"))
         
-        self.chk_parallel_search = QtWidgets.QCheckBox("✓ 启用并行搜索 (3-5倍速提升)")
+        self.chk_parallel_search = QtWidgets.QCheckBox("🟢 启用并行搜索 (3-5倍速提升)")
         self.chk_parallel_search.setChecked(self.api_config.parallel_search)
-        self.chk_parallel_search.setStyleSheet("color: #27ae60; font-weight: bold;")
+        self.chk_parallel_search.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE + "color: #27ae60; font-weight: bold;")
+        def update_parallel_search_text():
+            self.chk_parallel_search.setText("🟢 启用并行搜索 (3-5倍速提升)" if self.chk_parallel_search.isChecked() else "⚫ 启用并行搜索 (3-5倍速提升)")
+        self.chk_parallel_search.toggled.connect(update_parallel_search_text)
+        update_parallel_search_text()
         layout.addWidget(self.chk_parallel_search)
         
         # 下载并行配置
         download_layout = QtWidgets.QHBoxLayout()
-        self.chk_parallel_download = QtWidgets.QCheckBox("✓ 启用并行下载")
+        self.chk_parallel_download = QtWidgets.QCheckBox("🟢 启用并行下载")
         self.chk_parallel_download.setChecked(self.api_config.parallel_download)
-        self.chk_parallel_download.setStyleSheet("color: #34495e;")
+        self.chk_parallel_download.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        def update_parallel_download_text():
+            self.chk_parallel_download.setText("🟢 启用并行下载" if self.chk_parallel_download.isChecked() else "⚫ 启用并行下载")
+        self.chk_parallel_download.toggled.connect(update_parallel_download_text)
+        update_parallel_download_text()
         download_layout.addWidget(self.chk_parallel_download)
         
         download_layout.addSpacing(20)
@@ -1720,7 +1746,6 @@ class SettingsDialog(QtWidgets.QDialog):
             
             self.rb_local.setChecked(default.is_local_mode())
             self.rb_remote.setChecked(default.is_remote_mode())
-            self.input_local_dir.setText(default.local_output_dir)
             self.spin_local_timeout.setValue(default.local_timeout)
             self.input_remote_url.setText(default.remote_base_url)
             self.spin_remote_timeout.setValue(default.remote_timeout)
@@ -1753,11 +1778,11 @@ class SettingsDialog(QtWidgets.QDialog):
         # 更新全局 API 配置
         config = get_api_config()
         config.mode = APIMode.LOCAL if self.rb_local.isChecked() else APIMode.REMOTE
-        # 下载目录统一由主界面选择，这里不再保存输入框
+        # 下载目录统一由主界面选择，这里不再保存
         if hasattr(self.parent(), "settings"):
             config.local_output_dir = self.parent().settings.get("output_dir", "downloads")
         else:
-            config.local_output_dir = self.input_local_dir.text().strip() or "downloads"
+            config.local_output_dir = "downloads"
         config.local_timeout = self.spin_local_timeout.value()
         config.remote_base_url = self.input_remote_url.text().strip() or "http://127.0.0.1:8000"
         config.remote_timeout = self.spin_remote_timeout.value()
@@ -1871,6 +1896,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("标准下载 - 桌面版 V2.0.0")
+        
+        # 设置窗口图标
+        try:
+            import os
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.ico")
+            if os.path.exists(icon_path):
+                self.setWindowIcon(QtGui.QIcon(icon_path))
+        except Exception:
+            pass
+        
         self.resize(1200, 750)
         # 应用全局样式（包含对话框样式与统一的复选框样式）
         try:
@@ -1887,6 +1922,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "sources": ["GBW", "BY", "ZBY"],
             "output_dir": "downloads",
             "page_size": 30,  # 默认每页30条
+            "use_cache": True,  # 默认使用搜索缓存
         }
 
         # 缓存与历史管理器（用于搜索/下载历史记录）
@@ -1935,7 +1971,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_search.setMinimumWidth(80)
         self.btn_search.setStyleSheet(ui_styles.BTN_PRIMARY_STYLE)
         self.btn_search.clicked.connect(self.on_search)
+        self.chk_use_cache = QtWidgets.QCheckBox("🟢 使用缓存")
+        self.chk_use_cache.setChecked(True)
+        self.chk_use_cache.setToolTip("命中缓存时直接返回缓存结果，未命中再发起远程搜索")
+        # 选中/未选中时切换灯泡颜色
+        def update_cache_checkbox_text():
+            self.chk_use_cache.setText("🟢 使用缓存" if self.chk_use_cache.isChecked() else "⚫ 使用缓存")
+        self.chk_use_cache.toggled.connect(update_cache_checkbox_text)
+        # 仅对这个复选框应用特殊样式（隐藏框体，只显示文字灯泡）
+        try:
+            self.chk_use_cache.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        except Exception:
+            pass
         sr_layout.addWidget(self.input_keyword, 3)
+        sr_layout.addWidget(self.chk_use_cache, 1)
         sr_layout.addWidget(self.btn_search, 1)
         left_layout.addWidget(search_row)
 
@@ -2048,51 +2097,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 下载源选择由右侧复选框控制（移除下拉框）
         
-        # 队列管理按钮
-        self.btn_queue = QtWidgets.QPushButton("📥 队列")
-        self.btn_queue.setMaximumWidth(70)
-        self.btn_queue.setStyleSheet("""
-            QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 6px 8px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #d35400;
-            }
-            QPushButton:pressed {
-                background-color: #c0392b;
-            }
-        """)
-        self.btn_queue.clicked.connect(self.open_queue_dialog)
-        path_op_layout.addWidget(self.btn_queue)
-        
-        # 历史记录按钮
-        self.btn_history = QtWidgets.QPushButton("🕒 历史")
-        self.btn_history.setMaximumWidth(70)
-        self.btn_history.setStyleSheet("""
-            QPushButton {
-                background-color: #16a085;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 6px 8px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #138d75;
-            }
-            QPushButton:pressed {
-                background-color: #117864;
-            }
-        """)
-        self.btn_history.clicked.connect(self.open_history_dialog)
-        path_op_layout.addWidget(self.btn_history)
+        # 队列和历史按钮已移到日志标题行
+        # self.btn_queue 和 self.btn_history 现在在日志标题行创建
         
         # 设置按钮
         self.btn_settings = QtWidgets.QPushButton("⚙️ 设置")
@@ -2117,29 +2123,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_settings.clicked.connect(self.on_settings)
         path_op_layout.addWidget(self.btn_settings)
         
-        # 下载选中按钮
-        self.btn_download = QtWidgets.QPushButton("📥 下载")
-        self.btn_download.setMaximumWidth(65)
-        self.btn_download.setStyleSheet("""
-            QPushButton {
-                background-color: #51cf66;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 6px 8px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #37b24d;
-            }
-            QPushButton:pressed {
-                background-color: #2f8a3d;
-            }
-        """)
-        self.btn_download.clicked.connect(self.on_download)
-        path_op_layout.addWidget(self.btn_download)
-        
         # 批量下载按钮
         self.btn_batch_download = QtWidgets.QPushButton("🚀 批量下载")
         self.btn_batch_download.setMaximumWidth(85)
@@ -2162,22 +2145,60 @@ class MainWindow(QtWidgets.QMainWindow):
         """)
         self.btn_batch_download.clicked.connect(self.on_batch_download)
         path_op_layout.addWidget(self.btn_batch_download)
+        
+        # 声明按钮
+        self.btn_disclaimer = QtWidgets.QPushButton("📋 声明")
+        self.btn_disclaimer.setMaximumWidth(65)
+        self.btn_disclaimer.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 8px;
+                font-weight: bold;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+            QPushButton:pressed {
+                background-color: #4e555b;
+            }
+        """)
+        self.btn_disclaimer.clicked.connect(self.show_disclaimer)
+        path_op_layout.addWidget(self.btn_disclaimer)
 
         # 创建源复选框（右侧区域显示）
-        self.chk_gbw = QtWidgets.QCheckBox("GBW")
+        self.chk_gbw = QtWidgets.QCheckBox("🟢 GBW")
         self.chk_gbw.setChecked(True)
-        self.chk_gbw.setStyleSheet("color: #333; font-weight: bold;")
-        self.chk_by = QtWidgets.QCheckBox("BY")
+        try:
+            self.chk_gbw.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        except:
+            self.chk_gbw.setStyleSheet("color: #333; font-weight: bold;")
+        def update_main_gbw():
+            self.chk_gbw.setText("🟢 GBW" if self.chk_gbw.isChecked() else "⚫ GBW")
+        self.chk_gbw.toggled.connect(update_main_gbw)
+        self.chk_by = QtWidgets.QCheckBox("🟢 BY")
         self.chk_by.setChecked(True)
-        self.chk_by.setStyleSheet("color: #333; font-weight: bold;")
-        self.chk_zby = QtWidgets.QCheckBox("ZBY")
+        try:
+            self.chk_by.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        except:
+            self.chk_by.setStyleSheet("color: #333; font-weight: bold;")
+        def update_main_by():
+            self.chk_by.setText("🟢 BY" if self.chk_by.isChecked() else "⚫ BY")
+        self.chk_by.toggled.connect(update_main_by)
+        self.chk_zby = QtWidgets.QCheckBox("🟢 ZBY")
         self.chk_zby.setChecked(True)
-        self.chk_zby.setStyleSheet("color: #333; font-weight: bold;")
+        try:
+            self.chk_zby.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        except:
+            self.chk_zby.setStyleSheet("color: #333; font-weight: bold;")
+        def update_main_zby():
+            self.chk_zby.setText("🟢 ZBY" if self.chk_zby.isChecked() else "⚫ ZBY")
+        self.chk_zby.toggled.connect(update_main_zby)
 
         left_layout.addWidget(path_op_row)
-        
-        # 初始化时根据连通性设置状态
-        self.update_source_checkboxes()
 
         # 表格操作行：全选、筛选
         table_op_row = QtWidgets.QWidget()
@@ -2232,8 +2253,14 @@ class MainWindow(QtWidgets.QMainWindow):
         table_op_layout.addWidget(sep)
         
         # 筛选：仅显示有PDF
-        self.chk_filter_pdf = QtWidgets.QCheckBox("仅显示有PDF")
-        self.chk_filter_pdf.setStyleSheet("color: #333; font-weight: bold;")
+        self.chk_filter_pdf = QtWidgets.QCheckBox("⚫ 仅显示PDF")
+        try:
+            self.chk_filter_pdf.setStyleSheet(ui_styles.CACHE_CHECKBOX_STYLE)
+        except:
+            self.chk_filter_pdf.setStyleSheet("color: #333; font-weight: bold;")
+        def update_pdf_filter_text():
+            self.chk_filter_pdf.setText("🟢 仅显示PDF" if self.chk_filter_pdf.isChecked() else "⚫ 仅显示PDF")
+        self.chk_filter_pdf.toggled.connect(update_pdf_filter_text)
         self.chk_filter_pdf.stateChanged.connect(self.on_filter_changed)
         table_op_layout.addWidget(self.chk_filter_pdf)
         
@@ -2455,6 +2482,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_next_page.clicked.connect(self.on_next_page)
         page_layout.addWidget(self.btn_next_page)
         
+        # 在分页行添加下载按钮，居中显示
+        page_layout.addSpacing(20)
+        
+        # 定义下载按钮 - 放大处理，类似键盘space
+        self.btn_download = QtWidgets.QPushButton("📥 下载")
+        self.btn_download.setMinimumWidth(120)
+        self.btn_download.setMinimumHeight(36)
+        self.btn_download.setMaximumHeight(36)
+        self.btn_download.setStyleSheet("""
+            QPushButton {
+                background-color: #51cf66;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #37b24d;
+            }
+            QPushButton:pressed {
+                background-color: #2f8a3d;
+            }
+        """)
+        self.btn_download.clicked.connect(self.on_download)
+        page_layout.addWidget(self.btn_download)
+        page_layout.addSpacing(20)
+        
         left_layout.addWidget(page_row)
 
         splitter.addWidget(left)
@@ -2463,61 +2519,44 @@ class MainWindow(QtWidgets.QMainWindow):
         right = QtWidgets.QWidget()
         right_layout = QtWidgets.QVBoxLayout(right)
         
-        # 源连通性指示（顶部）
+        # 源选择区域（顶部）
         source_header = QtWidgets.QWidget()
-        source_hdr_layout = QtWidgets.QVBoxLayout(source_header)
-        source_hdr_layout.setContentsMargins(8, 8, 8, 4)
-        source_hdr_layout.setSpacing(8)
+        source_hdr_layout = QtWidgets.QHBoxLayout(source_header)
+        source_hdr_layout.setContentsMargins(8, 8, 8, 8)
+        source_hdr_layout.setSpacing(10)
         
-        # 数据源连通性标签和状态
-        source_title_layout = QtWidgets.QHBoxLayout()
-        lbl_sources = QtWidgets.QLabel("📡 数据源连通性:")
-        lbl_sources.setStyleSheet("font-weight: bold; color: #3498db; font-size: 12px;")
-        self.lbl_source_status = QtWidgets.QLabel("检测中...")
-        self.lbl_source_status.setStyleSheet("color: #ff9800; font-weight: bold;")
-        self.lbl_source_status.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
-        self.lbl_source_status.setMinimumWidth(140)
-        source_title_layout.addWidget(lbl_sources)
-        source_title_layout.addWidget(self.lbl_source_status, 1)
+        lbl_select = QtWidgets.QLabel("源选择:")
+        lbl_select.setStyleSheet("color: #333; font-weight: bold; font-size: 12px;")
+        source_hdr_layout.addWidget(lbl_select)
+        source_hdr_layout.addWidget(self.chk_gbw)
+        source_hdr_layout.addWidget(self.chk_by)
+        source_hdr_layout.addWidget(self.chk_zby)
         
-        # 重新检测按钮
-        self.btn_recheck_sources = QtWidgets.QPushButton("🔄 重新检测")
-        self.btn_recheck_sources.setMaximumWidth(100)
-        self.btn_recheck_sources.setStyleSheet("""
+        # 重试按钮
+        btn_retry = QtWidgets.QPushButton("🔄 重试")
+        btn_retry.setMaximumWidth(75)
+        btn_retry.setToolTip("重新测试数据源连通性")
+        btn_retry.setStyleSheet("""
             QPushButton {
-                background-color: #00b894;
+                background-color: #95a5a6;
                 color: white;
                 border: none;
                 border-radius: 3px;
                 padding: 4px 8px;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 11px;
             }
             QPushButton:hover {
-                background-color: #00a383;
+                background-color: #7f8c8d;
             }
         """)
-        self.btn_recheck_sources.clicked.connect(self.on_recheck_sources)
-        source_title_layout.addWidget(self.btn_recheck_sources)
-        source_title_layout.addStretch()
-        source_hdr_layout.addLayout(source_title_layout)
+        btn_retry.clicked.connect(self.check_source_health)
+        source_hdr_layout.addWidget(btn_retry)
         
-        # 源选择复选框行（放在右侧顶部，紧贴连通性）
-        source_checkbox_layout = QtWidgets.QHBoxLayout()
-        source_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        source_checkbox_layout.setSpacing(10)
-        lbl_select = QtWidgets.QLabel("源选择:")
-        lbl_select.setStyleSheet("color: #333; font-weight: bold;")
-        source_checkbox_layout.addWidget(lbl_select)
-        source_checkbox_layout.addWidget(self.chk_gbw)
-        source_checkbox_layout.addWidget(self.chk_by)
-        source_checkbox_layout.addWidget(self.chk_zby)
-        source_checkbox_layout.addStretch()
-        source_hdr_layout.addLayout(source_checkbox_layout)
+        source_hdr_layout.addStretch()
 
-        # 简化样式，保持紧凑
         source_header.setStyleSheet("")
-        source_header.setMinimumHeight(70)
+        source_header.setMinimumHeight(40)
         
         right_layout.addWidget(source_header)
         
@@ -2546,6 +2585,47 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_clear.clicked.connect(self.on_clear_log)
         log_hdr_layout.addWidget(lbl)
         log_hdr_layout.addStretch()
+        
+        # 队列按钮
+        btn_queue = QtWidgets.QPushButton("📥 队列")
+        btn_queue.setMaximumWidth(85)
+        btn_queue.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 8px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #d35400;
+            }
+        """)
+        btn_queue.clicked.connect(self.open_queue_dialog)
+        log_hdr_layout.addWidget(btn_queue)
+        
+        # 历史按钮
+        btn_history = QtWidgets.QPushButton("🕒 历史")
+        btn_history.setMaximumWidth(85)
+        btn_history.setStyleSheet("""
+            QPushButton {
+                background-color: #16a085;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 8px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #138d75;
+            }
+        """)
+        btn_history.clicked.connect(self.open_history_dialog)
+        log_hdr_layout.addWidget(btn_history)
+        
         log_hdr_layout.addWidget(btn_clear)
         right_layout.addWidget(log_header)
         
@@ -2631,6 +2711,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_path_display()
         self.update_source_checkboxes()
         self.check_source_health()
+        try:
+            self.chk_use_cache.setChecked(bool(self.settings.get("use_cache", True)))
+        except Exception:
+            pass
+        
+        # 启动下载队列处理器
+        self._start_download_queue_processor()
 
     def _qsettings(self) -> "QtCore.QSettings":
         # 固定组织/应用名，避免因脚本路径变化导致配置丢失
@@ -2666,6 +2753,17 @@ class MainWindow(QtWidgets.QMainWindow):
             sources = [s for s in sources if s in allowed]
             if sources:
                 self.settings["sources"] = sources
+
+            use_cache_val = qs.value("use_cache", self.settings.get("use_cache", True))
+            if isinstance(use_cache_val, str):
+                use_cache = use_cache_val.lower() != "false"
+            else:
+                use_cache = bool(use_cache_val)
+            self.settings["use_cache"] = use_cache
+            try:
+                self.chk_use_cache.setChecked(use_cache)
+            except Exception:
+                pass
         except Exception:
             # 读取失败则使用默认值
             return
@@ -2676,6 +2774,7 @@ class MainWindow(QtWidgets.QMainWindow):
             qs.setValue("output_dir", self.settings.get("output_dir", "downloads"))
             qs.setValue("page_size", int(self.settings.get("page_size", 30)))
             qs.setValue("sources", self.settings.get("sources", ["GBW", "BY", "ZBY"]))
+            qs.setValue("use_cache", bool(self.settings.get("use_cache", True)))
             qs.sync()
         except Exception:
             return
@@ -2826,7 +2925,29 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_export(self):
         """导出结果为 CSV"""
         if not self.current_items:
-            QtWidgets.QMessageBox.information(self, "提示", "暂无结果可导出")
+            msg = QtWidgets.QMessageBox(self)
+            msg.setWindowTitle("提示")
+            msg.setText("暂无结果可导出")
+            msg.setIcon(QtWidgets.QMessageBox.Information)
+            msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+            msg.setStyleSheet("""
+                QMessageBox {
+                    background-color: white;
+                }
+                QPushButton {
+                    min-width: 80px;
+                    background-color: #34c2db;
+                    color: #000000;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #2ab5cc;
+                }
+            """)
+            msg.exec()
             return
         
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -2988,17 +3109,161 @@ class MainWindow(QtWidgets.QMainWindow):
             self._save_persistent_settings()
 
     def check_source_health(self):
-        """检查源连通性"""
-        # 使用后台线程执行检查（结果更新交由回调处理）
+        """检查源连通性，在日志中显示结果"""
+        # 使用后台线程执行检查
         try:
+            self.append_log("🔍 正在检测数据源连通性...")
             th = SourceHealthThread(force=False, parent=self)
             self._source_health_thread = th
             th.finished.connect(self._on_check_source_health_result)
-            th.error.connect(lambda tb: (self.lbl_source_status.setText("检测失败"), self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;"), self.append_log(tb.splitlines()[-1] if tb else "source health error")))
+            th.error.connect(lambda tb: self.append_log(f"❌ 连通性检测失败: {tb.splitlines()[-1] if tb else '错误'}"))
             th.start()
         except Exception as e:
-            self.lbl_source_status.setText(f"检测失败: {str(e)[:20]}")
-            self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;")
+            self.append_log(f"❌ 连通性检测失败: {str(e)[:40]}")
+
+    def _start_download_queue_processor(self):
+        """启动下载队列处理器"""
+        try:
+            from core.download_queue import get_queue_manager
+            # 使用单worker避免并发冲突
+            self.queue_manager = get_queue_manager(max_workers=1)
+            
+            # 检查是否已经启动
+            if self.queue_manager.is_running():
+                self.append_log("✅ 下载队列处理器已在运行")
+                # 即使已经在运行，也要设置回调
+                self.queue_manager.on_task_start = self._on_queue_task_start
+                self.queue_manager.on_task_complete = self._on_queue_task_complete
+                self.queue_manager.on_task_fail = self._on_queue_task_fail
+                return
+            
+            # 设置回调
+            self.queue_manager.on_task_start = self._on_queue_task_start
+            self.queue_manager.on_task_complete = self._on_queue_task_complete
+            self.queue_manager.on_task_fail = self._on_queue_task_fail
+            
+            # 启动队列处理（传入工作函数）
+            self.queue_manager.start(self._download_worker_func)
+            self.append_log("✅ 下载队列处理器已启动（单worker模式）")
+        except Exception as e:
+            import traceback
+            self.append_log(f"❌ 启动队列处理器失败: {str(e)}")
+            print(traceback.format_exc())
+    
+    def _download_worker_func(self, task):
+        """队列工作函数：执行实际下载
+        
+        Args:
+            task: DownloadTask 对象
+            
+        Returns:
+            tuple: (success: bool, error_msg: str, file_path: str)
+        """
+        try:
+            from core.models import Standard
+            from core.aggregated_downloader import AggregatedDownloader
+            from pathlib import Path
+            
+            # 从任务元数据重建 Standard 对象
+            metadata = task.metadata or {}
+            std = Standard(
+                std_no=metadata.get("std_no", task.std_no),
+                name=metadata.get("name", task.std_name),
+                publish=metadata.get("publish", ""),
+                implement=metadata.get("implement", ""),
+                status=metadata.get("status", ""),
+                sources=metadata.get("sources", []),
+                has_pdf=True,
+                source_meta=metadata.get("source_meta", {})
+            )
+            
+            # 获取输出目录
+            output_dir = Path(self.settings.get("output_dir", "downloads"))
+            
+            # 获取下载源顺序
+            prefer_order = []
+            if hasattr(self, 'chk_by') and self.chk_by.isChecked():
+                prefer_order.append("BY")
+            if hasattr(self, 'chk_gbw') and self.chk_gbw.isChecked():
+                prefer_order.append("GBW")
+            if hasattr(self, 'chk_zby') and self.chk_zby.isChecked():
+                prefer_order.append("ZBY")
+            if not prefer_order:
+                prefer_order = ["BY", "GBW", "ZBY"]
+            
+            # 执行下载
+            downloader = AggregatedDownloader(output_dir=str(output_dir), enable_sources=None)
+            file_path, logs = downloader.download(std, prefer_order=prefer_order)
+            
+            if file_path:
+                return (True, "", str(file_path))
+            else:
+                error_msg = "所有来源均未成功"
+                if logs:
+                    # 从日志中提取错误信息
+                    error_lines = [line for line in logs if "失败" in line or "错误" in line]
+                    if error_lines:
+                        error_msg = error_lines[-1][:100]
+                return (False, error_msg, "")
+                
+        except Exception as e:
+            import traceback
+            error_msg = f"{str(e)[:100]}"
+            print(f"Download worker error: {traceback.format_exc()}")
+            return (False, error_msg, "")
+    
+    def _on_queue_task_start(self, task):
+        """队列任务开始回调"""
+        self.append_log(f"📥 开始下载: {task.std_no} {task.std_name}")
+    
+    def _on_queue_task_complete(self, task):
+        """队列任务完成回调"""
+        self.append_log(f"✅ 下载成功: {task.std_no} -> {task.file_path}")
+    
+    def _on_queue_task_fail(self, task):
+        """队列任务失败回调"""
+        error_msg = task.error_msg if task.error_msg else "未知错误"
+        self.append_log(f"❌ 下载失败: {task.std_no} - {error_msg}")
+
+    # ========== 缓存判定与日期辅助 ==========
+    def _parse_date_safe(self, value: str) -> Optional[datetime]:
+        """容错解析日期，支持常见 ISO/日期格式，解析失败返回 None"""
+        if not value:
+            return None
+        candidates = [value]
+        # 兼容 "2024-12-31 00:00:00" 这样的格式
+        if " " in value and "T" not in value:
+            candidates.append(value.replace(" ", "T"))
+        for v in candidates:
+            try:
+                return datetime.fromisoformat(v.strip())
+            except Exception:
+                continue
+        return None
+
+    def _record_is_near_abolish(self, record: dict, days: int = 180) -> bool:
+        """判断单条记录是否接近作废期；缺少日期则返回 False"""
+        date_keys = ["abolish", "abolish_date", "expire_date", "obsolete_date", "废止日期"]
+        now = datetime.now()
+        for key in date_keys:
+            dt = self._parse_date_safe(record.get(key, ""))
+            if not dt:
+                continue
+            delta = (dt - now).days
+            if delta < 0:
+                return True  # 已过期
+            if delta <= days:
+                return True
+        return False
+
+    def _should_skip_cache_for_near_abolish(self, cached_results: List[dict]) -> Optional[str]:
+        """检测缓存结果里是否存在临期/已过期标准；返回提示文本或 None"""
+        for rec in cached_results:
+            if self._record_is_near_abolish(rec):
+                std_no = rec.get("std_no", "")
+                abolish_date = rec.get("abolish") or rec.get("abolish_date") or rec.get("expire_date") or rec.get("obsolete_date") or rec.get("废止日期") or ""
+                return f"标准 {std_no} 将/已作废（日期: {abolish_date}），跳过缓存"
+        return None
 
     def on_search(self):
         keyword = self.input_keyword.text().strip()
@@ -3037,6 +3302,38 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # 更新设置中的源列表
         self.settings["sources"] = sources
+
+        # 是否使用缓存
+        use_cache = bool(self.chk_use_cache.isChecked())
+        self.settings["use_cache"] = use_cache
+        self._save_persistent_settings()
+        self.append_log(f"🔍 开始搜索: {keyword} | 源: {','.join(sources)} | 使用缓存: {'是' if use_cache else '否'}")
+
+        # 如果启用缓存，先尝试命中
+        if use_cache:
+            try:
+                cache_results = self.cache_manager.get_search_cache(keyword, sources, page=1)
+            except Exception as e:
+                cache_results = None
+                self.append_log(f"⚠️  读取缓存失败，将发起远程搜索: {str(e)[:80]}")
+
+            if cache_results:
+                skip_reason = self._should_skip_cache_for_near_abolish(cache_results)
+                if skip_reason:
+                    self.append_log(f"⚠️  缓存跳过: {skip_reason}")
+                else:
+                    self.append_log(f"📦 缓存命中，返回 {len(cache_results)} 条记录")
+                    self.all_items = cache_results
+                    self.current_page = 1
+                    self.apply_filter()
+                    self.status.showMessage(f"已从缓存加载 {len(cache_results)} 条结果", 3000)
+                    self.progress_bar.hide()
+                    self.btn_search.setEnabled(True)
+                    return
+            else:
+                self.append_log("ℹ️  缓存未命中，开始远程搜索")
+        else:
+            self.append_log("ℹ️  已关闭缓存，强制远程搜索")
         
         # 使用UI上的每页数量设置
         page_size = self.get_page_size()
@@ -3190,7 +3487,7 @@ class MainWindow(QtWidgets.QMainWindow):
         pass
 
     def _serialize_search_results_for_cache(self) -> List[dict]:
-        """将当前搜索结果转换为可缓存的纯数据结构"""
+        """将当前搜索结果转换为可缓存的纯数据结构（包含下载信息）"""
         serialized = []
         for item in self.all_items or []:
             obj = item.get("obj")
@@ -3207,6 +3504,24 @@ class MainWindow(QtWidgets.QMainWindow):
                 elif isinstance(item.get("sources"), str):
                     sources = [item.get("sources")]
 
+            # 保存完整对象信息以支持下载
+            obj_data = None
+            if obj:
+                try:
+                    obj_data = {
+                        "std_no": getattr(obj, "std_no", ""),
+                        "name": getattr(obj, "name", ""),
+                        "publish": getattr(obj, "publish", ""),
+                        "implement": getattr(obj, "implement", ""),
+                        "status": getattr(obj, "status", ""),
+                        "sources": list(getattr(obj, "sources", [])),
+                        "has_pdf": getattr(obj, "has_pdf", False),
+                        "source_meta": getattr(obj, "source_meta", {}),
+                        "_class_name": obj.__class__.__name__,
+                    }
+                except Exception:
+                    pass
+
             serialized.append({
                 "std_no": item.get("std_no", ""),
                 "name": item.get("name", ""),
@@ -3216,6 +3531,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "has_pdf": bool(item.get("has_pdf")),
                 "sources": sources,
                 "_display_source": item.get("_display_source", ""),
+                "_obj_data": obj_data,  # 保存对象数据用于下载
             })
         return serialized
 
@@ -3261,28 +3577,25 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log(tb)
 
     def _on_check_source_health_result(self, health_status: dict):
-        """用于 `check_source_health` 的回调，更新状态标签"""
+        """连通性检测回调，在日志中显示结果"""
         try:
-            status_parts = []
-            sources_enabled = self.settings.get("sources", ["GBW", "BY", "ZBY"])
             for src in ["GBW", "BY", "ZBY"]:
                 health = health_status.get(src)
                 if health:
                     is_available = getattr(health, 'available', False)
-                    enabled = src in sources_enabled
                     if is_available:
-                        icon = "🟢" if enabled else "⚪"
+                        self.append_log(f"🟢 {src} 源连通性正常")
                     else:
-                        icon = "🔴"
-                    status_parts.append(f"{icon}{src}")
-            status_text = " ".join(status_parts)
-            self.lbl_source_status.setText(status_text)
-            self.lbl_source_status.setStyleSheet("color: #34dbcb; font-weight: bold;")
+                        # 获取不通原因
+                        error_msg = getattr(health, 'error', '')
+                        reason = f" - {error_msg}" if error_msg else ""
+                        self.append_log(f"🔴 {src} 源连接失败{reason}")
+                else:
+                    self.append_log(f"⚠️  {src} 源检测结果为空")
         except Exception as e:
             tb = traceback.format_exc()
+            self.append_log(f"❌ 处理连通性结果失败: {str(e)}")
             self.append_log(tb)
-            self.lbl_source_status.setText(f"检测失败: {str(e)[:20]}")
-            self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;")
     
     def apply_filter(self):
         """根据筛选条件显示数据"""
@@ -3453,47 +3766,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if item.column() == 0:
             self.update_selection_count()
     
-    def on_recheck_sources(self):
-        """重新检测数据源连通性"""
-        self.append_log("正在重新检测数据源...")
-        self.lbl_source_status.setText("检测中...")
-        self.lbl_source_status.setStyleSheet("color: #ff9800; font-weight: bold;")
-        self.btn_recheck_sources.setEnabled(False)
-        
-        # 使用 QTimer 延迟执行，避免界面卡顿
-        QtCore.QTimer.singleShot(100, self._do_recheck_sources)
-    
-    def _do_recheck_sources(self):
-        """执行源检测"""
-        try:
-            th = SourceHealthThread(force=True, parent=self)
-            self._source_health_thread = th
-            def _on_finished(status):
-                for src_name, checkbox in [("GBW", self.chk_gbw), ("BY", self.chk_by), ("ZBY", self.chk_zby)]:
-                    health = status.get(src_name)
-                    if health and health.available:
-                        checkbox.setChecked(True)
-                        checkbox.setEnabled(True)
-                        self.append_log(f"✅ {src_name} 源可用")
-                    else:
-                        checkbox.setChecked(False)
-                        checkbox.setEnabled(False)
-                        self.append_log(f"❌ {src_name} 源不可用")
-
-                # 更新状态显示
-                self._on_check_source_health_result(status)
-                self.append_log("数据源检测完成")
-                self.btn_recheck_sources.setEnabled(True)
-
-            th.finished.connect(_on_finished)
-            th.error.connect(lambda tb: (self.append_log(tb), self.lbl_source_status.setText("检测失败"), self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;"), setattr(self, 'btn_recheck_sources', self.btn_recheck_sources)))
-            th.start()
-        except Exception as e:
-            self.append_log(f"检测失败: {str(e)}")
-            self.lbl_source_status.setText("检测失败")
-            self.lbl_source_status.setStyleSheet("color: #ff6b6b; font-weight: bold;")
-            self.btn_recheck_sources.setEnabled(True)
-
     def on_download(self):
         selected = []
         if hasattr(self, 'table_model') and self.table_model:
@@ -3564,6 +3836,175 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_download.setEnabled(True)
         self.progress_bar.hide()
         self.status.showMessage(f"下载完成: {success} 成功, {fail} 失败", 5000)
+
+    def add_to_download_queue(self, standards: List):
+        """从历史/缓存添加标准到下载队列
+        
+        Args:
+            standards: Standard 对象列表
+        """
+        if not standards:
+            return
+        
+        try:
+            from core.download_queue import get_queue_manager
+            queue_manager = get_queue_manager()
+            
+            # 批量添加任务到队列
+            added_count = 0
+            skipped_count = 0
+            
+            for std in standards:
+                # 检查是否有PDF
+                if not std.has_pdf:
+                    skipped_count += 1
+                    continue
+                
+                # 获取来源
+                sources = std.sources if isinstance(std.sources, list) else []
+                source_str = ",".join(sources[:3]) if sources else "未知"
+                
+                # 准备元数据
+                metadata = {
+                    "std_no": std.std_no,
+                    "name": std.name,
+                    "publish": std.publish,
+                    "implement": std.implement,
+                    "status": std.status,
+                    "sources": sources,
+                    "source_meta": std.source_meta if hasattr(std, 'source_meta') else {}
+                }
+                
+                # 添加到队列
+                task_id = queue_manager.add_task(
+                    std_no=std.std_no,
+                    std_name=std.name,
+                    priority=5,  # 默认优先级
+                    source=source_str,
+                    max_retries=3,
+                    metadata=metadata
+                )
+                added_count += 1
+            
+            # 显示结果消息
+            if added_count > 0:
+                msg = f"✅ 已添加 {added_count} 个任务到下载队列"
+                if skipped_count > 0:
+                    msg += f"\n⚠️ 跳过 {skipped_count} 个（无PDF）"
+                self.append_log(msg)
+            else:
+                msg = "⚠️ 没有可添加的任务（所有标准都没有PDF）"
+                self.append_log(msg)
+                
+        except Exception as e:
+            import traceback
+            error_msg = f"添加到队列失败：{str(e)}"
+            self.append_log(f"❌ {error_msg}")
+            print(f"Error: {error_msg}\n{traceback.format_exc()}")
+
+    def show_disclaimer(self):
+        """显示免责声明"""
+        disclaimer_text = """
+<h2 style='color: #e74c3c; text-align: center;'>⚠️ 免责声明 ⚠️</h2>
+
+<h3>一、软件性质</h3>
+<p>1. 本软件（"标准下载工具"）按"现状"提供，仅供<b>学习、研究和技术交流</b>使用。</p>
+<p>2. 本软件为免费开源软件，开发者不提供任何形式的明示或暗示保证，包括但不限于对适用性、准确性、可靠性的保证。</p>
+
+<h3>二、数据来源与版权</h3>
+<p>1. 本软件仅提供数据<b>整合和下载功能</b>，所有标准文件数据均来源于<b>公开可访问的第三方平台</b>。</p>
+<p>2. 所有标准文件的版权归<b>原始发布方和版权所有者</b>所有。</p>
+<p>3. 用户下载的文件应仅用于个人学习研究，不得用于商业用途。</p>
+
+<h3>三、使用风险与责任</h3>
+<p>1. 使用本软件的<b>所有风险由用户自行承担</b>。</p>
+<p>2. 开发者不对以下情况承担任何责任：</p>
+<ul>
+  <li>因使用或无法使用本软件而导致的任何直接或间接损失</li>
+  <li>数据的准确性、完整性、时效性</li>
+  <li>服务中断、数据丢失、系统故障等情况</li>
+  <li>因违反法律法规或侵犯第三方权益而产生的任何纠纷</li>
+</ul>
+
+<h3>四、法律合规</h3>
+<p>1. 用户必须遵守<b>中华人民共和国相关法律法规</b>，包括但不限于《著作权法》《标准化法》等。</p>
+<p>2. 禁止将本软件用于任何<b>非法用途</b>或侵犯他人合法权益的行为。</p>
+<p>3. 禁止将本软件用于<b>商业盈利目的</b>，包括但不限于转售、出租、提供有偿服务等。</p>
+
+<h3>五、其他条款</h3>
+<p>1. <b>使用本软件即表示您已阅读、理解并同意接受本声明的全部内容。</b></p>
+<p>2. 如您不同意本声明的任何内容，请立即停止使用本软件并删除所有相关文件。</p>
+<p>3. 开发者保留随时修改本声明的权利，修改后的声明将在软件更新后生效。</p>
+<p>4. 本声明的解释权归软件开发者所有。</p>
+
+<p style='margin-top: 20px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107;'>
+<b>📌 特别提示：</b>标准文件涉及国家规范和技术要求，建议通过官方渠道获取正式版本用于生产和认证用途。
+</p>
+        """
+        
+        # 创建自定义对话框
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("免责声明")
+        dialog.resize(700, 550)
+        
+        # 设置窗口图标
+        try:
+            import os
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.ico")
+            if os.path.exists(icon_path):
+                dialog.setWindowIcon(QtGui.QIcon(icon_path))
+        except Exception:
+            pass
+        
+        # 主布局
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 内容区域（可滚动）
+        content_widget = QtWidgets.QTextEdit()
+        content_widget.setReadOnly(True)
+        content_widget.setHtml(disclaimer_text)
+        content_widget.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                border: none;
+                padding: 20px;
+                font-family: 'Microsoft YaHei', Arial;
+                font-size: 10pt;
+            }
+        """)
+        layout.addWidget(content_widget)
+        
+        # 按钮区域（居中）
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.setContentsMargins(20, 20, 20, 20)
+        btn_layout.addStretch()
+        
+        btn_ok = QtWidgets.QPushButton("✓ 我已阅读并同意")
+        btn_ok.setMinimumSize(150, 45)
+        btn_ok.setStyleSheet("""
+            QPushButton {
+                background-color: #34c2db;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 8px 20px;
+            }
+            QPushButton:hover {
+                background-color: #2ab5cc;
+            }
+        """)
+        btn_ok.clicked.connect(dialog.accept)
+        btn_layout.addWidget(btn_ok)
+        
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+        dialog.setStyleSheet("background-color: white;")
+        dialog.exec()
 
     def on_batch_download(self):
         """打开批量下载对话框"""
