@@ -68,25 +68,33 @@ class HistoryDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(widget)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # 搜索栏
-        search_layout = QtWidgets.QHBoxLayout()
+        # 工具栏
+        toolbar = QtWidgets.QHBoxLayout()
         
         self.search_input = QtWidgets.QLineEdit()
         self.search_input.setPlaceholderText("搜索关键词...")
         self.search_input.returnPressed.connect(self.filter_search_history)
-        search_layout.addWidget(self.search_input)
+        toolbar.addWidget(self.search_input)
         
         search_btn = QtWidgets.QPushButton("🔍 搜索")
+        search_btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
         search_btn.setFixedWidth(80)
+        search_btn.setFixedHeight(32)
+        search_btn.setCursor(QtCore.Qt.PointingHandCursor)
         search_btn.clicked.connect(self.filter_search_history)
-        search_layout.addWidget(search_btn)
+        toolbar.addWidget(search_btn)
         
-        clear_search_btn = QtWidgets.QPushButton("🗑 清空")
-        clear_search_btn.setFixedWidth(80)
+        toolbar.addStretch()
+        
+        clear_search_btn = QtWidgets.QPushButton("🗑 清空历史")
+        clear_search_btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
+        clear_search_btn.setFixedWidth(100)
+        clear_search_btn.setFixedHeight(32)
+        clear_search_btn.setCursor(QtCore.Qt.PointingHandCursor)
         clear_search_btn.clicked.connect(self.clear_search_history)
-        search_layout.addWidget(clear_search_btn)
+        toolbar.addWidget(clear_search_btn)
         
-        layout.addLayout(search_layout)
+        layout.addLayout(toolbar)
         
         # 搜索历史列表
         self.search_history_table = QtWidgets.QTableWidget()
@@ -112,7 +120,10 @@ class HistoryDialog(QtWidgets.QDialog):
     
     def create_download_history_tab(self) -> QtWidgets.QWidget:
         """创建下载历史标签页"""
-        widget = QtWidgets.QWidget()
+        widget = QtWsetStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
+        refresh_btn.setFixedHeight(32)
+        refresh_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        refresh_btn.idgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
         layout.setContentsMargins(10, 10, 10, 10)
         
@@ -145,6 +156,19 @@ class HistoryDialog(QtWidgets.QDialog):
         self.download_history_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.download_history_table.setAlternatingRowColors(True)
         self.download_history_table.verticalHeader().setVisible(False)
+        # 统计信息栏
+        self.download_stats_label = QtWidgets.QLabel()
+        self.download_stats_label.setStyleSheet("""
+            QLabel {
+                background-color: #f8f9fa;
+                padding: 10px;
+                border-radius: 5px;
+                font-size: 13px;
+                color: #666;
+            }
+        """)
+        layout.addWidget(self.download_stats_label)
+        
         
         layout.addWidget(self.download_history_table)
         
@@ -288,6 +312,16 @@ class HistoryDialog(QtWidgets.QDialog):
         """双击搜索历史项"""
         row = index.row()
         keyword = self.search_history_table.item(row, 0).text()
+        # 统计信息
+        total = len(history)
+        total_size = sum(record['file_size'] or 0 for record in history)
+        size_str = self.format_file_size(total_size)
+        existing_files = sum(1 for r in history if r['file_path'] and Path(r['file_path']).exists())
+        
+        self.download_stats_label.setText(
+            f"📊 总计: {total} 条记录  |  💾 总大小: {size_str}  |  ✅ 文件存在: {existing_files} 个"
+        )
+        
         
         # 显示提示
         QtWidgets.QMessageBox.information(
