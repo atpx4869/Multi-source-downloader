@@ -77,22 +77,24 @@ class HistoryDialog(QtWidgets.QDialog):
         toolbar.addWidget(self.search_input)
         
         search_btn = QtWidgets.QPushButton("🔍 搜索")
-        search_btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
         search_btn.setFixedWidth(80)
-        search_btn.setFixedHeight(32)
-        search_btn.setCursor(QtCore.Qt.PointingHandCursor)
         search_btn.clicked.connect(self.filter_search_history)
         toolbar.addWidget(search_btn)
         
         toolbar.addStretch()
         
         clear_search_btn = QtWidgets.QPushButton("🗑 清空历史")
-        clear_search_btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
         clear_search_btn.setFixedWidth(100)
-        clear_search_btn.setFixedHeight(32)
-        clear_search_btn.setCursor(QtCore.Qt.PointingHandCursor)
         clear_search_btn.clicked.connect(self.clear_search_history)
         toolbar.addWidget(clear_search_btn)
+        
+        # 应用统一样式
+        for i in range(toolbar.count()):
+            btn = toolbar.itemAt(i).widget()
+            if isinstance(btn, QtWidgets.QPushButton):
+                btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
+                btn.setFixedHeight(32)
+                btn.setCursor(QtCore.Qt.PointingHandCursor)
         
         layout.addLayout(toolbar)
         
@@ -128,13 +130,18 @@ class HistoryDialog(QtWidgets.QDialog):
         toolbar = QtWidgets.QHBoxLayout()
         
         refresh_btn = QtWidgets.QPushButton("🔄 刷新")
-        refresh_btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
-        refresh_btn.setFixedHeight(32)
-        refresh_btn.setCursor(QtCore.Qt.PointingHandCursor)
         refresh_btn.clicked.connect(self.load_download_history)
         toolbar.addWidget(refresh_btn)
         
         toolbar.addStretch()
+        
+        # 应用统一样式
+        for i in range(toolbar.count()):
+            btn = toolbar.itemAt(i).widget()
+            if isinstance(btn, QtWidgets.QPushButton):
+                btn.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
+                btn.setFixedHeight(32)
+                btn.setCursor(QtCore.Qt.PointingHandCursor)
         
         layout.addLayout(toolbar)
         
@@ -229,12 +236,12 @@ class HistoryDialog(QtWidgets.QDialog):
         
         layout.addStretch()
         
-        # 应用样式
+        # 应用统一样式
         for i in range(actions_layout.count()):
             widget_item = actions_layout.itemAt(i).widget()
             if isinstance(widget_item, QtWidgets.QPushButton):
                 widget_item.setStyleSheet(ui_styles.BTN_SECONDARY_STYLE)
-                widget_item.setFixedHeight(36)
+                widget_item.setFixedHeight(32)
                 widget_item.setCursor(QtCore.Qt.PointingHandCursor)
         
         # 初始加载统计
