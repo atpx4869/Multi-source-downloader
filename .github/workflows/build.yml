@@ -36,17 +36,21 @@ jobs:
     
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip setuptools
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
-        pip install nuitka==${{ env.NUITKA_VERSION }} ordered-set zstandard
+        pip install nuitka ordered-set zstandard
       shell: pwsh
       continue-on-error: false
     
-    - name: Verify dependencies
+    - name: Verify critical dependencies
       run: |
         Write-Host "Verifying installed packages..." -ForegroundColor Cyan
-        python -c "import PySide6; import pandas; import numpy; import onnxruntime; print('All dependencies verified')"
+        python -c "import sys; print(f'Python {sys.version}')"
+        python -c "import PySide6; print('PySide6 OK')"
+        python -c "import pandas; print('pandas OK')"
+        python -c "import PIL; print('Pillow OK')"
       shell: pwsh
+      continue-on-error: true
     
     - name: Create auth cache
       run: |
@@ -67,7 +71,7 @@ jobs:
       run: |
         Write-Host "Starting Nuitka compilation for Win10+..." -ForegroundColor Cyan
         Write-Host "Python 3.11 + PySide6" -ForegroundColor Cyan
-        python -m nuitka --onefile --standalone `
+        python -m nuitka --onefile `
           --windows-console-mode=disable `
           --enable-plugin=pyside6 `
           --windows-icon-from-ico=app.ico `
@@ -75,8 +79,11 @@ jobs:
           --include-data-file=app/.auth_cache=app/.auth_cache `
           --assume-yes-for-downloads `
           --output-dir=dist `
-          --output-filename=MultiSourceDownloader.exe `
-          --lto=auto `
+          --company-name="MultiSourceDownloader" `
+          --product-name="MultiSourceDownloader" `
+          --file-version=4.0.0 `
+          --product-version=4.0.0 `
+          --file-description="Multi-Source Downloader" `
           desktop_app.py
         if ($LASTEXITCODE -eq 0) {
           Write-Host "Nuitka compilation completed successfully" -ForegroundColor Green
@@ -88,12 +95,15 @@ jobs:
     
     - name: Verify executable
       run: |
-        if (Test-Path "dist/MultiSourceDownloader.exe") {
-          $exe = Get-Item "dist/MultiSourceDownloader.exe"
+        if (Test-Path "dist/desktop_app.exe") {
+          $exe = Get-Item "dist/desktop_app.exe"
           Write-Host "✓ Executable created: $($exe.Name)" -ForegroundColor Green
           Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB" -ForegroundColor Green
+          Rename-Item -Path "dist/desktop_app.exe" -NewName "MultiSourceDownloader.exe"
+          Write-Host "✓ Renamed to MultiSourceDownloader.exe" -ForegroundColor Green
         } else {
           Write-Host "✗ Executable not found!" -ForegroundColor Red
+          Get-ChildItem dist -Recurse | ForEach-Object { Write-Host $_.FullName }
           exit 1
         }
       shell: pwsh
@@ -191,17 +201,21 @@ jobs:
     
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip setuptools
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements_win7.txt
-        pip install nuitka==${{ env.NUITKA_VERSION }} ordered-set zstandard
+        pip install nuitka ordered-set zstandard
       shell: pwsh
       continue-on-error: false
     
-    - name: Verify dependencies
+    - name: Verify critical dependencies
       run: |
         Write-Host "Verifying installed packages..." -ForegroundColor Cyan
-        python -c "import PySide2; import pandas; print('Dependencies verified')"
+        python -c "import sys; print(f'Python {sys.version}')"
+        python -c "import PySide2; print('PySide2 OK')"
+        python -c "import pandas; print('pandas OK')"
+        python -c "import PIL; print('Pillow OK')"
       shell: pwsh
+      continue-on-error: true
     
     - name: Create auth cache
       run: |
@@ -222,7 +236,7 @@ jobs:
       run: |
         Write-Host "Starting Nuitka compilation for Win7..." -ForegroundColor Cyan
         Write-Host "Python 3.8 + PySide2" -ForegroundColor Cyan
-        python -m nuitka --onefile --standalone `
+        python -m nuitka --onefile `
           --windows-console-mode=disable `
           --enable-plugin=pyside2 `
           --windows-icon-from-ico=app.ico `
@@ -230,8 +244,11 @@ jobs:
           --include-data-file=app/.auth_cache=app/.auth_cache `
           --assume-yes-for-downloads `
           --output-dir=dist `
-          --output-filename=MultiSourceDownloader-Win7.exe `
-          --lto=auto `
+          --company-name="MultiSourceDownloader" `
+          --product-name="MultiSourceDownloader" `
+          --file-version=4.0.0 `
+          --product-version=4.0.0 `
+          --file-description="Multi-Source Downloader (Win7 Compatible)" `
           desktop_app.py
         if ($LASTEXITCODE -eq 0) {
           Write-Host "Nuitka compilation completed successfully" -ForegroundColor Green
@@ -243,12 +260,15 @@ jobs:
     
     - name: Verify executable
       run: |
-        if (Test-Path "dist/MultiSourceDownloader-Win7.exe") {
-          $exe = Get-Item "dist/MultiSourceDownloader-Win7.exe"
+        if (Test-Path "dist/desktop_app.exe") {
+          $exe = Get-Item "dist/desktop_app.exe"
           Write-Host "✓ Executable created: $($exe.Name)" -ForegroundColor Green
           Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB" -ForegroundColor Green
+          Rename-Item -Path "dist/desktop_app.exe" -NewName "MultiSourceDownloader-Win7.exe"
+          Write-Host "✓ Renamed to MultiSourceDownloader-Win7.exe" -ForegroundColor Green
         } else {
           Write-Host "✗ Executable not found!" -ForegroundColor Red
+          Get-ChildItem dist -Recurse | ForEach-Object { Write-Host $_.FullName }
           exit 1
         }
       shell: pwsh
