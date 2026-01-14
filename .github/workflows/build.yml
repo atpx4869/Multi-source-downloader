@@ -121,31 +121,28 @@ jobs:
         BUILD_HASH: ${{ steps.build_info.outputs.hash }}
         NUITKA_VER: ${{ env.NUITKA_VERSION }}
       run: |
-        $versionInfo = @"
-# MultiSourceDownloader v4.0 - Windows 10+
-
-## Build Information
-- **Build Date**: $env:BUILD_DATE
-- **File Size**: $env:BUILD_SIZE MB
-- **Hash (SHA256)**: $env:BUILD_HASH...
-- **Compiler**: Nuitka $env:NUITKA_VER
-- **Python Version**: 3.11
-- **UI Framework**: PySide6 6.4+
-- **Target OS**: Windows 10, 11
-
-## Performance Features
-- ⚡ Fast startup: 1-2 seconds
-- 🔥 Native C-compiled speed
-- 💾 Optimized binary size (30-40% smaller than PyInstaller)
-- 📝 Full UTF-8 and Emoji support
-- 🎨 Modern UI with smooth animations
-
-## System Requirements
-- Windows 10 or later
-- No additional runtime required
-- ~300-400 MB disk space
-"@
-        $versionInfo | Out-File -FilePath "dist/VERSION.txt" -Encoding UTF8
+        echo "# MultiSourceDownloader v4.0 - Windows 10+" > dist/VERSION.txt
+        echo "" >> dist/VERSION.txt
+        echo "## Build Information" >> dist/VERSION.txt
+        echo "- **Build Date**: $env:BUILD_DATE" >> dist/VERSION.txt
+        echo "- **File Size**: $env:BUILD_SIZE MB" >> dist/VERSION.txt
+        echo "- **Hash (SHA256)**: $env:BUILD_HASH..." >> dist/VERSION.txt
+        echo "- **Compiler**: Nuitka $env:NUITKA_VER" >> dist/VERSION.txt
+        echo "- **Python Version**: 3.11" >> dist/VERSION.txt
+        echo "- **UI Framework**: PySide6 6.4+" >> dist/VERSION.txt
+        echo "- **Target OS**: Windows 10, 11" >> dist/VERSION.txt
+        echo "" >> dist/VERSION.txt
+        echo "## Performance Features" >> dist/VERSION.txt
+        echo "- Fast startup: 1-2 seconds" >> dist/VERSION.txt
+        echo "- Native C-compiled speed" >> dist/VERSION.txt
+        echo "- Optimized binary size (30-40%% smaller than PyInstaller)" >> dist/VERSION.txt
+        echo "- Full UTF-8 and Emoji support" >> dist/VERSION.txt
+        echo "- Modern UI with smooth animations" >> dist/VERSION.txt
+        echo "" >> dist/VERSION.txt
+        echo "## System Requirements" >> dist/VERSION.txt
+        echo "- Windows 10 or later" >> dist/VERSION.txt
+        echo "- No additional runtime required" >> dist/VERSION.txt
+        echo "- ~300-400 MB disk space" >> dist/VERSION.txt
         Write-Host "Version info created" -ForegroundColor Green
       shell: pwsh
     
@@ -279,31 +276,28 @@ jobs:
         BUILD_HASH: ${{ steps.build_info_win7.outputs.hash }}
         NUITKA_VER: ${{ env.NUITKA_VERSION }}
       run: |
-        $versionInfo = @"
-# MultiSourceDownloader v4.0 - Windows 7+
-
-## Build Information
-- **Build Date**: $env:BUILD_DATE
-- **File Size**: $env:BUILD_SIZE MB
-- **Hash (SHA256)**: $env:BUILD_HASH...
-- **Compiler**: Nuitka $env:NUITKA_VER
-- **Python Version**: 3.8
-- **UI Framework**: PySide2 5.15+
-- **Target OS**: Windows 7, 8, 10, 11
-
-## Performance Features
-- ⚡ Fast startup: 1-2 seconds
-- 🔥 Native C-compiled speed
-- 💾 Optimized binary size (30-40% smaller than PyInstaller)
-- 📝 Full UTF-8 and Emoji support
-- 🎯 Compatible with older Windows versions
-
-## System Requirements
-- Windows 7 or later (including 8, 10, 11)
-- No additional runtime required
-- ~300-400 MB disk space
-"@
-        $versionInfo | Out-File -FilePath "dist/VERSION_Win7.txt" -Encoding UTF8
+        echo "# MultiSourceDownloader v4.0 - Windows 7+" > dist/VERSION_Win7.txt
+        echo "" >> dist/VERSION_Win7.txt
+        echo "## Build Information" >> dist/VERSION_Win7.txt
+        echo "- **Build Date**: $env:BUILD_DATE" >> dist/VERSION_Win7.txt
+        echo "- **File Size**: $env:BUILD_SIZE MB" >> dist/VERSION_Win7.txt
+        echo "- **Hash (SHA256)**: $env:BUILD_HASH..." >> dist/VERSION_Win7.txt
+        echo "- **Compiler**: Nuitka $env:NUITKA_VER" >> dist/VERSION_Win7.txt
+        echo "- **Python Version**: 3.8" >> dist/VERSION_Win7.txt
+        echo "- **UI Framework**: PySide2 5.15+" >> dist/VERSION_Win7.txt
+        echo "- **Target OS**: Windows 7, 8, 10, 11" >> dist/VERSION_Win7.txt
+        echo "" >> dist/VERSION_Win7.txt
+        echo "## Performance Features" >> dist/VERSION_Win7.txt
+        echo "- Fast startup: 1-2 seconds" >> dist/VERSION_Win7.txt
+        echo "- Native C-compiled speed" >> dist/VERSION_Win7.txt
+        echo "- Optimized binary size (30-40%% smaller than PyInstaller)" >> dist/VERSION_Win7.txt
+        echo "- Full UTF-8 and Emoji support" >> dist/VERSION_Win7.txt
+        echo "- Compatible with older Windows versions" >> dist/VERSION_Win7.txt
+        echo "" >> dist/VERSION_Win7.txt
+        echo "## System Requirements" >> dist/VERSION_Win7.txt
+        echo "- Windows 7 or later (including 8, 10, 11)" >> dist/VERSION_Win7.txt
+        echo "- No additional runtime required" >> dist/VERSION_Win7.txt
+        echo "- ~300-400 MB disk space" >> dist/VERSION_Win7.txt
         Write-Host "Version info created" -ForegroundColor Green
       shell: pwsh
     
