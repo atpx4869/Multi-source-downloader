@@ -200,7 +200,7 @@ class GBWSource(BaseSource):
                 "pageSize": page_size
             }
             # 搜索时不重试：retries=0，快速失败
-            j = call_api(self.session, 'GET', search_url, params=params, timeout=8, retries=0)
+            j = call_api(self.session, 'GET', search_url, params=params, timeout=8, retries=0, verify_ssl=False)
             rows = find_rows(j)
         except Exception:
             pass
@@ -211,7 +211,7 @@ class GBWSource(BaseSource):
                 if '/' in keyword or ' ' in keyword:
                     kw_clean = keyword.replace('/', '').replace(' ', '')
                     params['searchText'] = kw_clean
-                    j = call_api(self.session, 'GET', search_url, params=params, timeout=8, retries=0)
+                    j = call_api(self.session, 'GET', search_url, params=params, timeout=8, retries=0, verify_ssl=False)
                     rows = find_rows(j)
             except Exception:
                 pass
@@ -593,7 +593,7 @@ class GBWSource(BaseSource):
         """检查 GBW 服务是否可访问（用于快速健康检测）"""
         try:
             test_url = f"{self.base_url}/gb/search/gbQueryPage?searchText=test&pageNum=1&pageSize=1"
-            resp = self.session.get(test_url, timeout=timeout)
+            resp = self.session.get(test_url, timeout=timeout, verify=False)  # 禁用 SSL 验证
             return 200 <= getattr(resp, 'status_code', 0) < 400
         except Exception:
             return False

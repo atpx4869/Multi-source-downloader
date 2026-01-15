@@ -36,7 +36,7 @@ def search_via_api(keyword: str, page: int = 1, page_size: int = 20, session: Op
     }
 
     # 搜索时不重试，快速失败
-    j = call_api(session, 'POST', api_url, json_body=body, headers=headers, timeout=timeout, retries=0)
+    j = call_api(session, 'POST', api_url, json_body=body, headers=headers, timeout=timeout, retries=0, verify_ssl=False)
     if j is None:
         print(f"[ZBY HTTP] API返回为空")
         return []

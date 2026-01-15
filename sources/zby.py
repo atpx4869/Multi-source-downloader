@@ -136,9 +136,40 @@ class ZBYSource(BaseSource):
         try:
             if frozen:
                 import requests
-                # 显式禁用代理，避免系统代理干扰
-                r: Response = requests.get(self.base_url, timeout=timeout, proxies={"http": None, "https": None})
-                return 200 <= getattr(r, 'status_code', 0) < 400
+                # 创建 session，禁用代理和 SSL 验证（对于国内站点）
+                session = requests.Session()
+                session.trust_env = False
+                session.proxies = {"http": None, "https": None}
+                
+                # 添加必要的 headers，避免被阻止
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": "https://bz.zhenggui.vip",
+                    "Origin": "https://bz.zhenggui.vip"
+                }
+                
+                # 尝试连接 ZBY 首页，禁用 SSL 验证避免证书问题
+                try:
+                    r: Response = session.get(
+                        self.base_url, 
+                        timeout=timeout, 
+                        headers=headers,
+                        verify=False  # 禁用 SSL 验证（国内站点常见问题）
+                    )
+                    return 200 <= getattr(r, 'status_code', 0) < 400
+                except Exception as e:
+                    # 备用方案：尝试连接 API 端点
+                    try:
+                        api_url = "https://login.bz.zhenggui.vip/bzy-api/org/std/search"
+                        r: Response = session.get(
+                            api_url,
+                            timeout=timeout,
+                            headers=headers,
+                            verify=False
+                        )
+                        return 200 <= getattr(r, 'status_code', 0) < 400
+                    except Exception:
+                        return False
             if self.client is not None and hasattr(self.client, 'is_available'):
                 return bool(self.client.is_available())
             return True
@@ -352,8 +383,8 @@ class ZBYSource(BaseSource):
             resp_text = ""
             for u in urls:
                 try:
-                    # 显式禁用代理，超时8秒
-                    r: Response = session.get(u, params={"searchText": keyword, "q": keyword}, headers=headers, timeout=8, proxies={"http": None, "https": None})
+                    # 显式禁用代理和 SSL 验证，超时8秒
+                    r: Response = session.get(u, params={"searchText": keyword, "q": keyword}, headers=headers, timeout=8, proxies={"http": None, "https": None}, verify=False)
                     if r.status_code == 200 and r.text and len(r.text) > 200:
                         resp_text = r.text
                         break
