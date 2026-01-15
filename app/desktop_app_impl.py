@@ -1908,21 +1908,26 @@ class SettingsDialog(QtWidgets.QDialog):
         
         layout.addWidget(self._create_section_header("📡 启用的数据源"))
         
-        self.chk_gbw = QtWidgets.QCheckBox("🟢 GBW (国家标准平台)")
-        self.chk_by = QtWidgets.QCheckBox("🟢 BY (内部系统)")
-        self.chk_zby = QtWidgets.QCheckBox("🟢 ZBY (标准云)")
+        self.chk_gbw = QtWidgets.QCheckBox("🟢 GBW")
+        self.chk_by = QtWidgets.QCheckBox("🟢 BY")
+        self.chk_zby = QtWidgets.QCheckBox("🟢 ZBY")
         
         self.chk_gbw.setChecked("gbw" in self.api_config.enable_sources)
         self.chk_by.setChecked("by" in self.api_config.enable_sources)
         self.chk_zby.setChecked("zby" in self.api_config.enable_sources)
         
+        # 添加工具提示
+        self.chk_gbw.setToolTip("国家标准信息公共服务平台")
+        self.chk_by.setToolTip("标院内网系统")
+        self.chk_zby.setToolTip("标准云在线平台")
+        
         # 添加灯泡切换功能
         def update_gbw_settings():
-            self.chk_gbw.setText("🟢 GBW (国家标准平台)" if self.chk_gbw.isChecked() else "⚫ GBW (国家标准平台)")
+            self.chk_gbw.setText("🟢 GBW" if self.chk_gbw.isChecked() else "⚫ GBW")
         def update_by_settings():
-            self.chk_by.setText("🟢 BY (内部系统)" if self.chk_by.isChecked() else "⚫ BY (内部系统)")
+            self.chk_by.setText("🟢 BY" if self.chk_by.isChecked() else "⚫ BY")
         def update_zby_settings():
-            self.chk_zby.setText("🟢 ZBY (标准云)" if self.chk_zby.isChecked() else "⚫ ZBY (标准云)")
+            self.chk_zby.setText("🟢 ZBY" if self.chk_zby.isChecked() else "⚫ ZBY")
         self.chk_gbw.toggled.connect(update_gbw_settings)
         self.chk_by.toggled.connect(update_by_settings)
         self.chk_zby.toggled.connect(update_zby_settings)
@@ -2861,19 +2866,24 @@ class MainWindow(QtWidgets.QMainWindow):
         # 源选择区域（顶部）
         source_header = QtWidgets.QWidget()
         source_hdr_layout = QtWidgets.QHBoxLayout(source_header)
-        source_hdr_layout.setContentsMargins(8, 8, 8, 8)
-        source_hdr_layout.setSpacing(10)
+        source_hdr_layout.setContentsMargins(8, 6, 8, 6)
+        source_hdr_layout.setSpacing(6)
         
         lbl_select = QtWidgets.QLabel("源选择:")
-        lbl_select.setStyleSheet("color: #333; font-weight: bold; font-size: 12px;")
+        lbl_select.setStyleSheet("color: #333; font-weight: bold; font-size: 11px;")
         source_hdr_layout.addWidget(lbl_select)
+        
+        # 设置复选框的最大宽度
+        for chk in [self.chk_gbw, self.chk_by, self.chk_zby]:
+            chk.setMaximumWidth(60)
+        
         source_hdr_layout.addWidget(self.chk_gbw)
         source_hdr_layout.addWidget(self.chk_by)
         source_hdr_layout.addWidget(self.chk_zby)
         
         # 重试按钮
         btn_retry = QtWidgets.QPushButton("🔄 重试")
-        btn_retry.setMaximumWidth(75)
+        btn_retry.setMaximumWidth(65)
         btn_retry.setToolTip("重新测试数据源连通性")
         btn_retry.setStyleSheet("""
             QPushButton {
@@ -2881,9 +2891,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 color: white;
                 border: none;
                 border-radius: 3px;
-                padding: 4px 8px;
+                padding: 3px 6px;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 10px;
             }
             QPushButton:hover {
                 background-color: #7f8c8d;
@@ -2895,7 +2905,7 @@ class MainWindow(QtWidgets.QMainWindow):
         source_hdr_layout.addStretch()
 
         source_header.setStyleSheet("")
-        source_header.setMinimumHeight(40)
+        source_header.setMinimumHeight(35)
         
         right_layout.addWidget(source_header)
         
