@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import List, Callable, Optional, Dict, Any
 
 from core.models import Standard
+from .base import BaseSource, DownloadResult
+from .registry import registry
 
 
 # BY 内网系统配置
@@ -169,12 +171,16 @@ def _download_standard(session: requests.Session, siid: str, outfile: Path) -> b
         return False
 
 
-class BYSource:
+@registry.register
+class BYSource(BaseSource):
     """BY (标院内网) Data Source"""
+    
+    source_id = "by"
+    source_name = "标院内网系统"
+    priority = 2
     
     def __init__(self):
         self.name = "BY"
-        self.priority = 2
         self.session = requests.Session()
         self.session.trust_env = False  # 忽略系统代理
         self.session.headers.update({
@@ -234,8 +240,35 @@ class BYSource:
         
         return items
     
-    def download(self, item: Standard, output_dir: Path, log_cb: Callable[[str], None] = None) -> tuple:
-        """Download from BY source"""
+    def download(self, item: Standard, outdir: Path) -> DownloadResult:
+        """按新协议下载标准文档
+        
+        Args:
+            item: Standard 对象
+            outdir: 输出目录
+            
+        Returns:
+            DownloadResult 对象
+        """
+        logs = []
+        try:
+            result = self._download_impl(item, outdir, log_cb=lambda msg: logs.append(msg))
+            if result:
+                if isinstance(result, tuple):
+                    file_path, logged = result
+                    if file_path:
+                        return DownloadResult.ok(Path(file_path), logs)
+                else:
+                    if result:
+                        return DownloadResult.ok(Path(result), logs)
+            
+            error_msg = logs[-1] if logs else "BY: Unknown error"
+            return DownloadResult.fail(error_msg, logs)
+        except Exception as e:
+            return DownloadResult.fail(f"BY download exception: {str(e)}", logs)
+    
+    def _download_impl(self, item: Standard, output_dir: Path, log_cb: Callable[[str], None] = None) -> tuple:
+        """[原实现] Download from BY source"""
         logs = []
         
         def emit(msg: str):

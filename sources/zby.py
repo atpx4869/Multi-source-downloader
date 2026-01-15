@@ -18,6 +18,8 @@ from requests import Response
 DEFAULT_BASE_URL = "https://bz.zhenggui.vip"
 
 from core.models import Standard
+from .base import BaseSource, DownloadResult
+from .registry import registry
 
 
 # Prefer local shim; fall back to dotted import for compatibility
@@ -51,9 +53,13 @@ def _mirror_debug_file_static(p: Path) -> None:
         pass
 
 
-class ZBYSource:
-    name = "ZBY"
+@registry.register
+class ZBYSource(BaseSource):
+    source_id = "zby"
+    source_name = "正规标准网"
     priority = 3
+    
+    name = "ZBY"
 
     def __init__(self, output_dir: Union[Path, str] = "downloads") -> None:
         od = Path(output_dir)
@@ -375,8 +381,35 @@ class ZBYSource:
         
         return items
 
-    def download(self, item: Standard, outdir: Path, log_cb=None):
-        """下载标准。签名兼容两种调用方式：
+    def download(self, item: Standard, outdir: Path) -> DownloadResult:
+        """按新协议下载标准文档
+        
+        Args:
+            item: Standard 对象
+            outdir: 输出目录
+            
+        Returns:
+            DownloadResult 对象
+        """
+        logs = []
+        try:
+            result = self._download_impl(item, outdir, log_cb=lambda msg: logs.append(msg))
+            if result:
+                if isinstance(result, tuple):
+                    file_path, logged = result
+                    if file_path:
+                        return DownloadResult.ok(Path(file_path) if not isinstance(file_path, Path) else file_path, logs)
+                else:
+                    if result:
+                        return DownloadResult.ok(Path(result) if not isinstance(result, Path) else result, logs)
+            
+            error_msg = logs[-1] if logs else "ZBY: Unknown error"
+            return DownloadResult.fail(error_msg, logs)
+        except Exception as e:
+            return DownloadResult.fail(f"ZBY download exception: {str(e)}", logs)
+    
+    def _download_impl(self, item: Standard, outdir: Path, log_cb=None):
+        """[原实现] 下载标准。签名兼容两种调用方式：
         - download(item, outdir, log_cb=callable)  -> (Path|None, list[str])
         - download(item, outdir) -> Optional[Path]
         返回 (path, logs) 或直接 path/None（兼容旧实现）。
