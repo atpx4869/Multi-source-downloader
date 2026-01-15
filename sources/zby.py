@@ -12,6 +12,10 @@ import re
 import tempfile
 import shutil
 import os
+import urllib3
+
+# 抑制 urllib3 的 SSL 验证警告（我们故意禁用 SSL 验证以兼容国内网站）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from requests import Response
 

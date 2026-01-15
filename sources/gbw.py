@@ -4,8 +4,12 @@ GBW Source - 国家标准信息公共服务平台 (std.samr.gov.cn)
 """
 import re
 import requests
+import urllib3
 from pathlib import Path
 from typing import List, Callable
+
+# 抑制 urllib3 的 SSL 验证警告（我们故意禁用 SSL 验证以兼容国内网站）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from core.models import Standard
 from .gbw_download import get_hcno, download_with_ocr, sanitize_filename, prewarm_ocr

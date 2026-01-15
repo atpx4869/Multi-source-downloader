@@ -3,6 +3,10 @@ import requests
 import logging
 import time
 import json
+import urllib3
+
+# 抑制 urllib3 的 SSL 验证警告（我们故意禁用 SSL 验证以兼容国内网站）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _LOGGER = logging.getLogger(__name__)
 # Simple in-memory cache keyed by (method,url,params,json) -> response JSON
