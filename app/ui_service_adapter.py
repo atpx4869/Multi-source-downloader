@@ -4,18 +4,55 @@ UI Service Adapter - 连接 UI 层和 Service 层
 
 这是一个过渡层，用于将现有的 UI 代码逐步迁移到新的 Service 架构。
 同时保持向后兼容性，不破坏现有的 Qt 信号系统。
+
+注意：Qt 信号需要在 QObject 派生类中定义。这个适配器提供了一个信号发射器。
 """
 
 from pathlib import Path
 from typing import List, Optional, Callable, Dict
-from dataclasses import dataclass
-from enum import Enum
+import threading
+import time
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+try:
+    from PyQt5 import QtCore, QtGui, QtWidgets
+    PYQT_VER = 5
+except ImportError:
+    try:
+        from PySide6 import QtCore, QtGui, QtWidgets
+        PYQT_VER = 6
+    except ImportError:
+        try:
+            from PySide2 import QtCore, QtGui, QtWidgets
+            PYQT_VER = 2
+        except ImportError:
+            raise ImportError("需要安装 PyQt5 或 PySide6 或 PySide2")
 
-from core import DownloadService, SearchService, DownloadTask, SearchTask, TaskEvent, TaskStatus
+from core import DownloadService, SearchService, TaskEvent, TaskStatus
 from core.models import Standard
 
+
+# ============ 信号发射器类（必须继承 QObject）============
+
+class SignalEmitter(QtCore.QObject):
+    """Qt 信号发射器"""
+    
+    # 下载信号
+    download_started = QtCore.Signal(str)      # task_id
+    download_progress = QtCore.Signal(str, int, int, str)  # task_id, current, total, message
+    download_completed = QtCore.Signal(str, str)  # task_id, file_path (转换为字符串以兼容 Qt)
+    download_failed = QtCore.Signal(str, str)  # task_id, error
+    download_cancelled = QtCore.Signal(str)    # task_id
+    all_downloads_finished = QtCore.Signal(int, int)  # success_count, fail_count
+    
+    # 搜索信号
+    search_started = QtCore.Signal(str)  # task_id
+    search_result = QtCore.Signal(str, object)  # task_id, Standard
+    search_progress = QtCore.Signal(str, str)  # task_id, message
+    search_completed = QtCore.Signal(str, list)  # task_id, all_results
+    search_failed = QtCore.Signal(str, str)  # task_id, error
+
+
+# ============ 下载适配器 ============
 
 class UIDownloadAdapter:
     """UI 和 DownloadService 的适配器
@@ -28,27 +65,22 @@ class UIDownloadAdapter:
     使用方式：
     
     ```python
-    adapter = UIDownloadAdapter(parent_widget)
-    adapter.download_started.connect(on_download_start)
-    adapter.download_progress.connect(on_progress)
-    adapter.download_completed.connect(on_completed)
-    adapter.download_failed.connect(on_failed)
+    adapter = UIDownloadAdapter()
+    adapter.signals.download_started.connect(on_download_start)
+    adapter.signals.download_progress.connect(on_progress)
+    adapter.signals.download_completed.connect(on_completed)
+    adapter.signals.download_failed.connect(on_failed)
     
-    task = adapter.submit_downloads(items, output_dir)
-    status = adapter.get_status(task.id)
-    adapter.cancel_download(task.id)
+    adapter.submit_downloads([std1, std2], Path("./downloads"))
+    status = adapter.get_status(task_id)
+    adapter.cancel_download(task_id)
     ```
     """
     
-    # Qt Signals
-    download_started = QtCore.pyqtSignal(str)      # task_id
-    download_progress = QtCore.pyqtSignal(str, int, int, str)  # task_id, current, total, message
-    download_completed = QtCore.pyqtSignal(str, Path)  # task_id, file_path
-    download_failed = QtCore.pyqtSignal(str, str)  # task_id, error
-    download_cancelled = QtCore.pyqtSignal(str)    # task_id
-    all_downloads_finished = QtCore.pyqtSignal(int, int)  # success_count, fail_count
-    
     def __init__(self, max_workers: int = 3):
+        # 创建信号发射器
+        self.signals = SignalEmitter()
+        
         self.service = DownloadService(max_workers=max_workers)
         self.service.start()
         
@@ -79,7 +111,7 @@ class UIDownloadAdapter:
             task = self.service.submit(std, output_dir)
             task_ids.append(task.id)
             self._batch_tasks.append(task.id)
-            self.download_started.emit(task.id)
+            self.signals.download_started.emit(task.id)
         
         # 启动监控线程，检测批次完成
         if batch_callback:
@@ -125,29 +157,26 @@ class UIDownloadAdapter:
     
     def _on_service_progress(self, event: TaskEvent):
         """处理 Service 的 progress 事件"""
-        self.download_progress.emit(event.task_id, 0, 100, event.message)
+        self.signals.download_progress.emit(event.task_id, 0, 100, event.message)
     
     def _on_service_completed(self, event: TaskEvent):
         """处理 Service 的 completed 事件"""
         if event.result and event.result.file_path:
-            self.download_completed.emit(event.task_id, event.result.file_path)
+            self.signals.download_completed.emit(event.task_id, str(event.result.file_path))
             self._check_batch_completion()
     
     def _on_service_failed(self, event: TaskEvent):
         """处理 Service 的 failed 事件"""
-        self.download_failed.emit(event.task_id, event.error or "Unknown error")
+        self.signals.download_failed.emit(event.task_id, event.error or "Unknown error")
         self._check_batch_completion()
     
     def _on_service_cancelled(self, event: TaskEvent):
         """处理 Service 的 cancelled 事件"""
-        self.download_cancelled.emit(event.task_id)
+        self.signals.download_cancelled.emit(event.task_id)
         self._check_batch_completion()
     
     def _monitor_batch(self, callback: Callable[[int, int], None]):
         """监控批次完成状态"""
-        import threading
-        import time
-        
         def monitor():
             while True:
                 status = self.get_batch_status()
@@ -157,7 +186,7 @@ class UIDownloadAdapter:
                     status["completed"] + status["failed"] == status["total"]
                 ):
                     callback(status["completed"], status["failed"])
-                    self.all_downloads_finished.emit(status["completed"], status["failed"])
+                    self.signals.all_downloads_finished.emit(status["completed"], status["failed"])
                     break
                 
                 time.sleep(0.5)
@@ -169,19 +198,16 @@ class UIDownloadAdapter:
         """检查批次是否完成"""
         status = self.get_batch_status()
         if status["running"] == 0 and status["completed"] + status["failed"] == status["total"]:
-            self.all_downloads_finished.emit(status["completed"], status["failed"])
+            self.signals.all_downloads_finished.emit(status["completed"], status["failed"])
 
 
 class UISearchAdapter:
     """UI 和 SearchService 的适配器"""
     
-    search_started = QtCore.pyqtSignal(str)  # task_id
-    search_result = QtCore.pyqtSignal(str, object)  # task_id, Standard
-    search_progress = QtCore.pyqtSignal(str, str)  # task_id, message
-    search_completed = QtCore.pyqtSignal(str, list)  # task_id, all_results
-    search_failed = QtCore.pyqtSignal(str, str)  # task_id, error
-    
     def __init__(self, max_workers: int = 3):
+        # 创建信号发射器
+        self.signals = SignalEmitter()
+        
         self.service = SearchService(max_workers=max_workers)
         self.service.start()
         
@@ -196,7 +222,7 @@ class UISearchAdapter:
             任务 ID
         """
         task = self.service.submit(keyword)
-        self.search_started.emit(task.id)
+        self.signals.search_started.emit(task.id)
         return task.id
     
     def get_results(self, task_id: str, blocking: bool = True) -> List[Standard]:
@@ -215,7 +241,6 @@ class UISearchAdapter:
         
         if blocking:
             # 等待任务完成
-            import time
             while task.status == TaskStatus.PENDING or task.status == TaskStatus.RUNNING:
                 time.sleep(0.1)
         
@@ -229,25 +254,27 @@ class UISearchAdapter:
     
     def _on_service_progress(self, event: TaskEvent):
         """处理 Service 的 progress 事件"""
-        self.search_progress.emit(event.task_id, event.message)
+        self.signals.search_progress.emit(event.task_id, event.message)
     
     def _on_service_completed(self, event: TaskEvent):
         """处理 Service 的 completed 事件"""
         if event.result:
-            self.search_completed.emit(event.task_id, event.result)
+            self.signals.search_completed.emit(event.task_id, event.result)
     
     def _on_service_failed(self, event: TaskEvent):
         """处理 Service 的 failed 事件"""
-        self.search_failed.emit(event.task_id, event.error or "Unknown error")
+        self.signals.search_failed.emit(event.task_id, event.error or "Unknown error")
 
+# ============ 全局适配器实例（单例）- 已弃用 ============
+# 推荐：直接在 UI 类中创建适配器实例作为类属性
+# 例：self.download_adapter = UIDownloadAdapter(max_workers=3)
 
-# 全局适配器实例（单例）
 _download_adapter: Optional[UIDownloadAdapter] = None
 _search_adapter: Optional[UISearchAdapter] = None
 
 
 def get_download_adapter() -> UIDownloadAdapter:
-    """获取全局下载适配器实例"""
+    """获取全局下载适配器实例（弃用，推荐直接创建）"""
     global _download_adapter
     if _download_adapter is None:
         _download_adapter = UIDownloadAdapter(max_workers=3)
@@ -255,7 +282,7 @@ def get_download_adapter() -> UIDownloadAdapter:
 
 
 def get_search_adapter() -> UISearchAdapter:
-    """获取全局搜索适配器实例"""
+    """获取全局搜索适配器实例（弃用，推荐直接创建）"""
     global _search_adapter
     if _search_adapter is None:
         _search_adapter = UISearchAdapter(max_workers=3)
@@ -271,3 +298,4 @@ def shutdown_adapters():
     if _search_adapter:
         _search_adapter.shutdown()
         _search_adapter = None
+
