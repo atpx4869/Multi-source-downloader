@@ -36,13 +36,23 @@
 - **Python 3.8+** （如果从源码运行）
 - **互联网连接**（用于API调用）
 
-## 📦 安装和使用
+## 📦 快速开始
 
 ### 方式一：可执行文件（推荐）
 
 从 [Releases](https://github.com/atpx4869/Multi-source-downloader/releases) 下载最新版本，直接运行即可。
 
-### 方式二：从源码运行
+### 方式二：使用脚本（推荐）
+
+```bash
+# 首次安装
+scripts\首次安装.bat
+
+# 启动程序
+scripts\启动应用.bat
+```
+
+### 方式三：手动安装
 
 1. **克隆仓库：**
    ```bash
@@ -63,7 +73,7 @@
 
 4. **运行应用：**
    ```bash
-   python desktop_app.py
+   python main.py
    ```
 
 ## ⚙️ 配置
@@ -89,7 +99,13 @@
 }
 ```
 
-详见 `config/API_CONFIG_GUIDE.md`
+详见 [config/API_CONFIG_GUIDE.md](config/API_CONFIG_GUIDE.md)
+
+## 📚 文档
+
+- **[使用指南](docs/使用指南.md)** - 详细的功能说明和操作步骤
+- **[常见问题](docs/常见问题.md)** - 故障排查和解决方案
+- **[API配置](config/API_CONFIG_GUIDE.md)** - 数据源配置说明
 
 ## 📁 项目结构
 
@@ -168,12 +184,21 @@ multi-source-downloader/
 Remove-Item cache/* -Recurse
 ```
 
-## 📚 文档
+## 📁 项目结构
 
-- [API 架构说明](config/API_CONFIG_GUIDE.md)
-- [本地运行指南](docs/guides/LOCAL_RUN_GUIDE.md)
-- [性能优化建议](docs/guides/PERFORMANCE_OPTIMIZATION.md)
-- [Excel 工具使用](web_app/WEB_APP_GUIDE.md)
+```
+Multi-source-downloader/
+├── main.py                 # 主程序入口
+├── api/                    # API适配层
+├── app/                    # 桌面应用UI
+├── core/                   # 核心业务逻辑
+├── sources/                # 数据源实现
+├── config/                 # 配置文件
+├── docs/                   # 文档
+├── scripts/                # 工具脚本
+├── tests/                  # 测试文件
+└── _archive/               # 历史文档归档
+```
 
 ## 🔄 技术栈
 

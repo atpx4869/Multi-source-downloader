@@ -12,7 +12,8 @@
       "Bash(python:*)",
       "Bash(.venvScriptspython.exe:*)",
       "Bash(.venv/Scripts/python.exe:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git push:*)"
     ]
   }
 }

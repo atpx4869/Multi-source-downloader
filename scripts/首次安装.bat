@@ -54,6 +54,6 @@ echo ============================================================
 echo.
 echo 现在可以运行:
 echo   1. 双击 run.bat 启动应用
-echo   2. 或在命令行运行: WinPython-3.11.9\python.exe desktop_app.py
+echo   2. 或在命令行运行: WinPython-3.11.9\python.exe main.py
 echo.
 pause

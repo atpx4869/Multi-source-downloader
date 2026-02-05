@@ -125,7 +125,7 @@ def _ensure_qt_platform_plugin_path():
 
 _ensure_qt_platform_plugin_path()
 
-import ui_styles
+from app import ui_styles
 
 # 规范号规范化正则（复用以避免在循环中重复编译）
 _STD_NO_RE = re.compile(r"[\s/\-–—_:：]+")

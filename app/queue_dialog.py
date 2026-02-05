@@ -14,7 +14,7 @@ except ImportError:
     PYSIDE_VER = 2
 
 from core.download_queue import get_queue_manager, DownloadTask, TaskStatus
-import ui_styles
+from app import ui_styles
 
 
 class QueueDialog(QtWidgets.QDialog):

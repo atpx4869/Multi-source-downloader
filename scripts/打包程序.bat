@@ -42,7 +42,7 @@ echo  Please wait...
     --icon app.ico ^
     --distpath dist ^
     --name MultiSourceDownloader ^
-    desktop_app.py
+    main.py
 
 REM 验证结果
 echo.

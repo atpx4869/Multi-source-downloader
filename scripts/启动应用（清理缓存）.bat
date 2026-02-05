@@ -21,7 +21,7 @@ echo [2/3] 验证修复...
 echo.
 echo [3/3] 启动应用...
 echo.
-.\.venv\Scripts\python.exe desktop_app.py
+..\\.venv\\Scripts\\python.exe ..\\main.py
 
 if errorlevel 1 (
     echo.

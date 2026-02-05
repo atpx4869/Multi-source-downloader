@@ -14,7 +14,7 @@ except ImportError:
     PYSIDE_VER = 2
 
 from core.cache_manager import get_cache_manager
-import ui_styles
+from app import ui_styles
 
 
 class HistoryDialog(QtWidgets.QDialog):

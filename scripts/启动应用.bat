@@ -20,7 +20,7 @@ if not exist "WinPython-3.11.9\python.exe" (
 )
 
 REM 启动应用
-"WinPython-3.11.9\python.exe" desktop_app.py
+"WinPython-3.11.9\python.exe" ..\\main.py
 
 REM 如果有错误代码，显示错误信息
 if errorlevel 1 (
