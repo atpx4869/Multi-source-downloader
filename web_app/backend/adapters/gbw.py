@@ -50,7 +50,9 @@ class GBWAdapter(BaseAdapter):
                 publish_date=std.publish,
                 implement_date=std.implement,
                 status=std.status,
-                replace_std=std.replace_std
+                replace_std=std.replace_std,
+                sources=std.sources if std.sources else [self.source_name],
+                source_meta=std.source_meta
             )
             results.append(model)
         
@@ -84,13 +86,10 @@ class GBWAdapter(BaseAdapter):
             
             result = self._source.download(item, Path(output_dir))
             
-            if result and result.success:
+            if result.success:
                 return str(result.file_path), result.logs
             else:
-                logs = result.logs if result else []
-                if result and result.error and result.error not in logs:
-                    logs.append(f"错误: {result.error}")
-                return None, logs
+                return None, result.logs
         
         loop = asyncio.get_event_loop()
         filepath, download_logs = await loop.run_in_executor(None, _download_task)

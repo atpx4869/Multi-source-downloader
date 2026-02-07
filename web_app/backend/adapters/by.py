@@ -50,7 +50,9 @@ class BYAdapter(BaseAdapter):
                 publish_date=std.publish,
                 implement_date=std.implement,
                 status=std.status,
-                replace_std=std.replace_std
+                replace_std=std.replace_std,
+                sources=std.sources if std.sources else [self.source_name],
+                source_meta=std.source_meta
             )
             results.append(model)
         

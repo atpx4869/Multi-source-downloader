@@ -269,6 +269,8 @@ class BYSource(BaseSource):
             results = _search_by(self.session, keyword)
             
             for r in results:
+                # Include standardized _has_pdf key in source_meta
+                meta = {**r, "_has_pdf": True}
                 std = Standard(
                     std_no=r.get("std_no", ""),
                     name=r.get("std_name", ""),
@@ -276,7 +278,7 @@ class BYSource(BaseSource):
                     implement_date=r.get("implement", ""),
                     status=r.get("status", ""),
                     has_pdf=True,  # BY 源检索到的均有正文
-                    source_meta=r,
+                    source_meta=meta,
                     sources=["BY"]
                 )
                 items.append(std)
@@ -285,6 +287,10 @@ class BYSource(BaseSource):
         
         return items
     
+    def has_pdf(self, item: Standard) -> bool:
+        """BY 源检索到的均认为有正文"""
+        return True
+
     def download(self, item: Standard, outdir: Path) -> DownloadResult:
         """按新协议下载标准文档
         

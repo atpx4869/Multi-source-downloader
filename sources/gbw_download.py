@@ -27,7 +27,7 @@ BAIDU_OCR_AK = "64hxUIMiToJXovvmVFNCOoUQ"
 BAIDU_OCR_SK = "ps6RGIKaBprXgKRC2LYmZJK8sMLMV4GE"
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-BASE = "http://c.gb688.cn"
+BASE = "http://c.gb688.cn"  # Original working domain from v1.1.5
 CAPTCHA_URL = f"{BASE}/bzgk/gb/gc"
 VERIFY_URL = f"{BASE}/bzgk/gb/verifyCode"
 VIEW_URL = f"{BASE}/bzgk/gb/viewGb"
@@ -47,14 +47,15 @@ def prewarm_ocr():
         return
     
     # 提前检查 NumPy 版本。如果 >= 2.0，则跳过 PPLL OCR，防止 onnxruntime 导致 SystemError 崩溃
-    try:
-        import numpy as np
-        if int(np.__version__.split('.')[0]) >= 2:
-            # print("NumPy version >= 2.0 detected, skipping PPLL OCR to avoid crash.")
-            _OCR_PREWARMED = True
-            return
-    except Exception:
-        pass
+    # DISABLED: Allow PPLL OCR to work with NumPy 2.x (ppllocr 2.2 is compatible)
+    # try:
+    #     import numpy as np
+    #     if int(np.__version__.split('.')[0]) >= 2:
+    #         # print("NumPy version >= 2.0 detected, skipping PPLL OCR to avoid crash.")
+    #         _OCR_PREWARMED = True
+    #         return
+    # except Exception:
+    #     pass
 
     # 提前检查 onnxruntime 是否可用
     try:
@@ -219,12 +220,13 @@ def ppll_ocr(img_bytes: bytes) -> str:
         return ""
     
     # 提前检查 NumPy 版本
-    try:
-        import numpy as np
-        if int(np.__version__.split('.')[0]) >= 2:
-            return ""
-    except Exception:
-        pass
+    # DISABLED: Allow PPLL OCR to work with NumPy 2.x (ppllocr 2.2 is compatible)
+    # try:
+    #     import numpy as np
+    #     if int(np.__version__.split('.')[0]) >= 2:
+    #         return ""
+    # except Exception:
+    #     pass
     
     # 提前检查 onnxruntime 是否可用
     try:
@@ -480,6 +482,23 @@ def download_with_ocr(
             resp.raise_for_status()
             
             # 检查页面内容，看是否真的可用
+            html_low = resp.text.lower()
+            
+            # 强化型：版权检测关键词
+            copyright_keywords = [
+                "版权保护", 
+                "暂不提供在线阅读服务", 
+                "涉及版权保护",
+                "采用了ISO", "采用了IEC", 
+                "国际国外组织的标准"
+            ]
+            
+            for kw in copyright_keywords:
+                if kw.lower() in html_low:
+                    msg = f"该标准由于涉及版权保护问题（{kw}），本平台不提供在线阅读或下载。"
+                    log(f"GBW: {msg}")
+                    raise RuntimeError(msg)
+
             if "未找到" in resp.text or "不存在" in resp.text:
                 log(f"GBW: 类型 {gbw_type} 不可用 (页面提示未找到或不存在)")
                 continue
@@ -523,6 +542,8 @@ def download_with_ocr(
                 resp = session.get(url, headers=headers, timeout=10, proxies={"http": None, "https": None})
                 resp.raise_for_status()
                 img_bytes = resp.content
+                vlog(f"[Attempt {attempt}] Captcha Content-Type: {resp.headers.get('Content-Type')} Size: {len(img_bytes)}")
+                
                 # 如果返回的是 HTML 而不是图片，说明可能被拦截或类型不对
                 if b"<html" in img_bytes[:100].lower():
                     log(f"GBW: 获取验证码返回了 HTML，可能类型 {gbw_type} 不支持下载")

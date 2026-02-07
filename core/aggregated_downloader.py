@@ -205,7 +205,7 @@ class AggregatedDownloader:
     @staticmethod
     def _norm_std_no(std_no: str) -> str:
         # 统一去掉空白和常见分隔符，避免名称差异造成重复
-        return re.sub(r"[\\s/\\-–—_:：]+", "", std_no or "").lower()
+        return re.sub(r"[\s/\-–—_:：]+", "", std_no or "").lower()
 
     def _merge_items(self, existing: Dict[str, Standard], items: List[Standard], src_name: str):
         """合并去重，确保 source_meta 始终为 {源名: meta} 结构；同一标准号只保留一条。"""
@@ -347,13 +347,17 @@ class AggregatedDownloader:
     def _clone_for_source(self, item: Standard, src_name: str) -> Standard:
         meta_map = item.source_meta if isinstance(item.source_meta, dict) else {src_name: item.source_meta}
         meta = meta_map.get(src_name, meta_map)
+        
+        # Determine source-specific has_pdf hint
+        src_has_pdf = meta.get("_has_pdf", item.has_pdf) if isinstance(meta, dict) else item.has_pdf
+        
         return Standard(
             std_no=item.std_no,
             name=item.name,
             publish_date=item.publish_date,
             implement_date=item.implement_date,
             status=item.status,
-            has_pdf=item.has_pdf,
+            has_pdf=src_has_pdf,
             source_meta=meta,
             sources=[src_name],
         )
@@ -452,6 +456,8 @@ class AggregatedDownloader:
             emit("没有可用的下载源")
             return None, logs
 
+        import concurrent.futures
+        
         # 按优先级逐个尝试所有源（兜底机制）
         for src in ordered_sources:
             clone = self._clone_for_source(item, src.name)
@@ -464,6 +470,20 @@ class AggregatedDownloader:
             download_timeout = get_timeout(src.name, "download")
 
             try:
+                # 最终确认该源是否真的有 PDF（搜索时的标记可能是启发式的，详情页才是最终标准）
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    def _check_availability():
+                        return src.has_pdf(clone)
+                    
+                    future_check = executor.submit(_check_availability)
+                    try:
+                        is_actually_available = future_check.result(timeout=10) # 10s check timeout
+                        if not is_actually_available:
+                            emit(f"{src.name}: 详情页确认无 PDF（可能受版权保护或仅限在线阅读），尝试下一个源")
+                            continue
+                    except Exception as e:
+                        emit(f"{src.name}: 检查可用性失败: {e}，尝试直接下载")
+
                 path = None
                 extra_logs: list[str] = []
                 

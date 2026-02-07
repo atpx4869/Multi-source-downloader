@@ -15,7 +15,9 @@ from web_app.backend.config import settings
 from web_app.backend.adapters import ZBYAdapter, GBWAdapter, BYAdapter
 from web_app.backend.services.search import SearchService
 from web_app.backend.services.download import DownloadService
-from web_app.backend.api import search, download, health
+from web_app.backend.api import search, download, health, standard_check, excel_completion, batch
+from web_app.backend.services.standard_check_service import StandardCheckService
+from web_app.backend.services.excel_completion_service import ExcelCompletionService
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -78,16 +80,24 @@ if "BY" in settings.ENABLED_SOURCES:
 # 初始化服务
 search_service_instance = SearchService(adapters)
 download_service_instance = DownloadService(adapters)
+standard_check_service_instance = StandardCheckService()
+excel_completion_service_instance = ExcelCompletionService()
 
 # 注入服务到路由
 search.set_search_service(search_service_instance)
 download.set_download_service(download_service_instance)
 health.set_adapters(adapters)
+standard_check.set_service(standard_check_service_instance)
+excel_completion.set_service(excel_completion_service_instance)
+batch.set_service(search_service_instance)
 
 # 注册路由
 app.include_router(search.router, prefix=settings.API_PREFIX)
 app.include_router(download.router, prefix=settings.API_PREFIX)
 app.include_router(health.router, prefix=settings.API_PREFIX)
+app.include_router(standard_check.router, prefix=settings.API_PREFIX)
+app.include_router(excel_completion.router, prefix=settings.API_PREFIX)
+app.include_router(batch.router, prefix=settings.API_PREFIX, tags=["batch"])
 
 
 @app.get("/")
@@ -121,9 +131,8 @@ async def api_info():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        app,
         host="0.0.0.0",
         port=8000,
-        reload=True,
         log_level="info"
     )

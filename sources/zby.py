@@ -6,9 +6,14 @@ This module avoids importing Playwright at module-import time so it is safe
 to include in frozen executables. If Playwright is needed it will be loaded
 only at runtime by explicit callers.
 """
-from pathlib import Path
-from typing import Dict, List, Union, Optional
+import asyncio
 import re
+import json
+import logging
+import random
+from pathlib import Path
+from typing import List, Optional, Tuple, Union
+from urllib.parse import quote
 import tempfile
 import shutil
 import os
@@ -61,6 +66,44 @@ except Exception:
     except Exception:
         StandardDownloader = None
 
+# --- Pure API Signature Logic ---
+import hashlib
+import concurrent.futures
+import img2pdf
+import requests
+import time
+
+ORIGIN_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+def _get_random(t="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"):
+    res = []
+    for char in t:
+        if char == 'x':
+            res.append(ORIGIN_CHARS[int(random.random() * len(ORIGIN_CHARS))])
+        else:
+            res.append(char)
+    return "".join(res)
+
+def _get_md5(s):
+    return hashlib.md5(s.encode('utf-8')).hexdigest()
+
+def _get_nonce():
+    import time
+    t = _get_random()
+    e = int(time.time() * 1000)
+    return {"nonce": f"{t}_{e}", "timeStamp": e}
+
+def _get_signature(nonce, timestamp, slot):
+    # md5(timestamp + "_" + nonce + "_" + slot)
+    raw = f"{timestamp}_{nonce}_{slot}"
+    return _get_md5(raw)
+
+def _get_request_must_params(slot="zby_org"):
+    n = _get_nonce()
+    nonce = n['nonce']
+    timestamp = n['timeStamp']
+    signature = _get_signature(nonce, timestamp, slot)
+    return {"nonce": nonce, "signature": signature}
 
 def _mirror_debug_file_static(p: Path) -> None:
     try:
@@ -129,6 +172,15 @@ class ZBYSource(BaseSource):
             except Exception:
                 self.client = None
                 self.base_url: str = DEFAULT_BASE_URL
+        
+        # 统一初始化 session
+        import requests
+        self.session = requests.Session()
+        self.session.headers.update({
+             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+             "Referer": "https://bz.zhenggui.vip",
+        })
+        self.session.trust_env = False  # 禁用系统代理
 
         # 尝试从前端 config.yaml 读取真实 API 基址（使用缓存）
         try:
@@ -401,6 +453,7 @@ class ZBYSource(BaseSource):
                                 pass
                         
                         meta = row
+                        meta["_has_pdf"] = has_pdf
                         # Normalize publish/implement fields from possible API keys
                         pub = (row.get('standardPubTime') or row.get('publish') or '')
                         # impl 已在状态修正时提取，复用
@@ -500,148 +553,313 @@ class ZBYSource(BaseSource):
             return DownloadResult.fail(f"ZBY download exception: {str(e)}", logs)
     
     def _download_impl(self, item: Standard, outdir: Path, log_cb=None):
-        """[原实现] 下载标准。签名兼容两种调用方式：
-        - download(item, outdir, log_cb=callable)  -> (Path|None, list[str])
-        - download(item, outdir) -> Optional[Path]
-        返回 (path, logs) 或直接 path/None（兼容旧实现）。
-        """
+        """New Pure API Implementation"""
         outdir.mkdir(parents=True, exist_ok=True)
         logs = []
         def emit(msg: str) -> None:
-            if not msg:
-                return
-            # 涉及保密，脱敏处理：隐藏所有网址
+            if not msg: return
             msg = re.sub(r'https?://[^\s<>"]+', '[URL]', msg)
-            
             logs.append(msg)
+            print(f"[ZBY TRACE] {msg}")
             if callable(log_cb):
                 try:
                     log_cb(msg)
                 except Exception:
                     pass
 
-        # 若 meta 过于精简（仅有 title/has_pdf），尝试用 HTTP 搜索补充 standardId 等字段，便于后续下载
-        try:
-            meta = item.source_meta if isinstance(item.source_meta, dict) else {}
-            has_id = any(k in meta for k in ("standardId", "id", "standardid"))
-            if not has_id:
-                kw = item.std_no or item.name
-                if kw:
-                    http_items = []
-                    try:
-                        http_items = self._http_search_api(kw, page_size=3)
-                        if not http_items:
-                            http_items = self._http_search_html_fallback(kw, page_size=3)
-                    except Exception:
-                        http_items = []
-                    for hi in http_items:
-                        m2 = hi.source_meta if isinstance(hi.source_meta, dict) else {}
-                        if any(k in m2 for k in ("standardId", "id", "standardid")):
-                            item = hi
-                            break
-        except Exception:
-            pass
+        emit(f"ZBY: Starting download for: {item.std_no}")
 
-        # Prefer client implementation when available
-        if self.client is not None and hasattr(self.client, 'download_standard'):
-            try:
-                path = self.client.download_standard(item.source_meta)
-                p = Path(path) if path else None
-                if p:
-                    if callable(log_cb):
-                        return p, logs
-                    return p
-                # client 存在但返回空：不要在这里终止，继续走 HTTP/Playwright 回退
-                emit("ZBY: client.download_standard 返回空，尝试 HTTP 回退")
-            except Exception as e:
-                emit(f"ZBY: client.download_standard 异常: {e}")
-
-        # 新增：若 meta 中有 standardId，尝试直接调用 standardDetail 页面获取文档
-        try:
-            meta = item.source_meta if isinstance(item.source_meta, dict) else {}
-            std_id = meta.get("standardId") or meta.get("id") or meta.get("standardid")
-
-            # 优先检查 pdfList 或 taskPdfList
-            pdf_list = meta.get("pdfList") or meta.get("taskPdfList")
-            if pdf_list and isinstance(pdf_list, list) and len(pdf_list) > 0:
-                emit(f"ZBY: 从 meta 中发现 pdfList，尝试直接下载...")
-                pdf_info = pdf_list[0]  # 使用第一个 PDF
-
-                # 提取 UUID
-                if isinstance(pdf_info, dict):
-                    # 尝试多种可能的字段名
-                    uuid = (pdf_info.get('uuid') or
-                           pdf_info.get('resourceId') or
-                           pdf_info.get('docId') or
-                           pdf_info.get('fileId'))
-
-                    if uuid:
-                        emit(f"ZBY: 从 pdfList 提取到 UUID: {uuid[:8]}...")
-                        result = download_images_to_pdf(uuid, item.filename(), outdir, [], emit)
-                        if result:
-                            return result, logs
-
-                    # 尝试直接 URL
-                    url = (pdf_info.get('url') or
-                          pdf_info.get('fileUrl') or
-                          pdf_info.get('downloadUrl'))
-
-                    if url:
-                        emit(f"ZBY: 从 pdfList 发现下载链接，尝试直接下载...")
-                        try:
-                            import requests
-                            session = requests.Session()
-                            session.trust_env = False
-                            resp = session.get(url, timeout=30, stream=True, proxies={"http": None, "https": None})
-                            if resp.status_code == 200:
-                                output_path = outdir / item.filename()
-                                with open(output_path, 'wb') as f:
-                                    for chunk in resp.iter_content(8192):
-                                        if chunk:
-                                            f.write(chunk)
-                                emit(f"ZBY: PDF 下载成功")
-                                return output_path, logs
-                        except Exception as e:
-                            emit(f"ZBY: 直接下载失败: {e}")
-
-            # 如果 pdfList 不可用，尝试通过 standardId
-            if std_id:
-                emit(f"ZBY: 尝试通过 standardId ({std_id}) 直接获取文档...")
-                http_try = self._download_via_standard_id(std_id, item, outdir, emit)
-                if http_try is not None:
-                    return http_try
-        except Exception as e:
-            emit(f"ZBY: standardId 直接获取失败: {e}")
-
-        # 一步：尝试通过 HTTP 直接从详情页提取资源 UUID 并下载（无需 Playwright）
-        try:
-            http_try = self._http_download_via_uuid(item, outdir, emit)
-            if http_try is not None:
-                return http_try
-        except Exception as e:
-            emit(f"ZBY: HTTP 回退提取 UUID 失败: {e}")
-
-        if self.allow_playwright:
-            try:
-                from .zby_playwright import ZBYSource as PWZBYSource  # type: ignore
-                pw: ZBYSource = PWZBYSource(output_dir=outdir)
+        # 1. Extract Standard ID
+        meta = item.source_meta if isinstance(item.source_meta, dict) else {}
+        std_id = meta.get("standardId") or meta.get("id") or meta.get("standardid")
+        
+        if not std_id:
+            emit("ZBY: Meta missing ID, attempting search fallback...")
+            kw = item.std_no or item.name
+            if kw:
                 try:
-                    result = pw.download(item, outdir, log_cb=log_cb)
-                except TypeError:
-                    result = pw.download(item, outdir)
-                # 确保返回格式一致
-                if isinstance(result, tuple):
-                    return result
-                else:
-                    if callable(log_cb):
-                        return (Path(result) if result else None, logs)
-                    return Path(result) if result else None
-            except Exception as e:
-                emit(f"ZBY: Playwright 回落失败: {e}")
+                    # Reuse existing HTTP search
+                    results = self._search_impl(kw, page_size=1)
+                    if results:
+                         m2 = results[0].source_meta
+                         std_id = m2.get("standardId") or m2.get("id")
+                         if std_id:
+                             emit(f"ZBY: Found ID via search: {std_id}")
+                except Exception as e:
+                    emit(f"ZBY: Search fallback failed: {e}")
+        
+        if not std_id:
+            emit("ZBY: [FAILURE] Could not determine Standard ID")
+            return None
 
-        emit("ZBY: 无法下载（缺少 StandardDownloader 且 Playwright 不可用或失败）")
-        if callable(log_cb):
-            return None, logs
+        # 2. Get Title and Details (for filename)
+        std_title, std_no = self._get_standard_details(std_id, emit)
+        
+        # 3. Get UUID
+        has_pdf_hint = meta.get("_has_pdf", meta.get("hasPdf", True))
+        if not has_pdf_hint and has_pdf_hint is not None:
+             emit(f"ZBY: [INFO] Standard metadata indicates no PDF available (hasPdf=0). Skipping UUID extraction.")
+             uuid, page_count, pdf_name = None, 0, ""
+        else:
+             uuid, page_count, pdf_name = self._get_uuid_via_api(std_id, emit)
+        
+        if uuid:
+             # 4. Construct Filename
+             filename_str = f"{item.std_no}.pdf" # Default
+             
+             if std_title:
+
+                 # Remove illegal chars
+                 safe_title = re.sub(r'[\/*?:"<>|]', "", std_title)
+                 # Use retrieved std_no or item's std_no if missing
+                 use_no = std_no if std_no else (item.std_no or pdf_name)
+                 safe_no = re.sub(r'[\/*?:"<>|]', "", use_no)
+                 filename_str = f"{safe_no} {safe_title}.pdf"
+                 emit(f"ZBY: Filename set to: {filename_str}")
+             elif pdf_name:
+                 filename_str = f"{pdf_name}.pdf"
+             
+             final_path = outdir / filename_str
+             
+             # 5. Download
+             result_path, _ = self._download_images_concurrently(uuid, page_count, final_path, emit)
+             if result_path:
+                 return str(result_path), logs
+        else:
+            emit("ZBY: [FAILURE] Could not extract UUID via API")
+            
+        return None
+
+
+    def _get_standard_details(self, std_id: Union[str, int], emit: callable):
+        emit(f"ZBY: Fetching details for std_id={std_id}...")
+        
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/json;charset=UTF-8",
+            "Origin": "https://bz.zhenggui.vip",
+            "Referer": f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}&docStatus=0"
+        })
+        session.verify = False
+
+        base_url = "https://login.bz.zhenggui.vip/bzy-api/org/standard/stdcontent"
+        
+        # New correct payload
+        payload = {
+            "params": {
+                "standardId": str(std_id),
+                "clsName": None,
+                "keyword": None
+            },
+            "token": "",
+            "userId": "",
+            "orgId": ""
+        }
+        
+        query_params = _get_request_must_params("zby_org")
+        
+        try:
+            r = session.post(base_url, params=query_params, json=payload, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("code") == 1 and data.get("data"):
+                     res = data["data"]
+                     if isinstance(res, dict):
+                         tittle = res.get("tittle", {})
+                         name = tittle.get("standardName", "")
+                         std_no = tittle.get("standardNum", "")
+                     elif isinstance(res, list) and len(res) > 0:
+                         item = res[0]
+                         name = item.get("chineseName", "")
+                         std_no = item.get("standardNo", "")
+                     else:
+                         name = ""
+                         std_no = ""
+                     emit(f"ZBY: Got Title: {name}, No: {std_no}")
+                     return name, std_no
+        except Exception as e:
+            emit(f"ZBY: Detail Request Failed: {e}")
+            
+        return None, None
+
+    def _get_uuid_via_api(self, std_id: Union[str, int], emit: callable):
+        emit(f"ZBY: Extracting UUID for std_id={std_id}...")
+        
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/json;charset=UTF-8",
+            "Origin": "https://bz.zhenggui.vip",
+            "Referer": f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}&docStatus=0"
+        })
+        session.verify = False
+
+        base_url = "https://login.bz.zhenggui.vip/bzy-api/org/standard/getPdfList"
+        
+        payload = {
+            "params": str(std_id),
+            "token": "",
+            "userId": "",
+            "orgId": ""
+        }
+        
+        query_params = _get_request_must_params("zby_org")
+        
+        try:
+            r = session.post(base_url, params=query_params, json=payload, timeout=10)
+            
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("code") == 1 and data.get("data"):
+                    item = data["data"][0]
+                    uuid = item.get("immDoc")
+                    page_count = item.get("aliyunPageCount", 0)
+                    pdf_name = item.get("pdfName", "")
+                    
+                    emit(f"ZBY: Found UUID: {uuid}, PDF Name: {pdf_name}")
+                    return uuid, page_count, pdf_name
+        except Exception as e:
+            emit(f"ZBY: UUID Request Failed: {e}")
+            
+        return None, 0, ""
+    
+    def has_pdf(self, item: Standard) -> bool:
+        """
+        Check if a standard has downloadable PDF by attempting to get UUID.
+        
+        Args:
+            item: Standard object with metadata
+            
+        Returns:
+            True if UUID can be obtained (PDF available), False otherwise
+        """
+        try:
+            # Extract standardId from metadata
+            std_id = None
+            if isinstance(item.source_meta, dict):
+                std_id = item.source_meta.get("standardId") or item.source_meta.get("id")
+            
+            if not std_id:
+                return False
+            
+            # Try to get UUID - if successful, PDF is available
+            def silent_emit(msg):
+                pass  # Suppress output for availability check
+            
+            uuid, _, _ = self._get_uuid_via_api(std_id, silent_emit)
+            return uuid is not None and uuid != ""
+            
+        except Exception:
+            return False
+
+
+    def _download_images_concurrently(self, uuid: str, page_count: int, output_file: Path, emit: callable):
+        """Concurrent download of images to PDF using requests."""
+        emit(f"ZBY: Starting concurrent download for UUID={uuid}...")
+        
+        output_dir = output_file.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        temp_dir = output_dir / f"zby_temp_{int(time.time()*1000)}"
+        if temp_dir.exists(): shutil.rmtree(temp_dir)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://preview.imm.aliyun.com/",
+        })
+        
+        # helper: try download a single page
+        def download_page(page_num):
+            base_urls = [
+                f"https://resource.zhenggui.vip/immdoc/{uuid}/doc/I/{page_num}", # Most common
+                f"https://resource.zhenggui.vip/immdoc/{uuid}/doc/page{page_num:04d}.png",
+                f"https://resource.zhenggui.vip/immdoc/{uuid}/doc/page{page_num:04d}.jpg"
+            ]
+            
+            for url in base_urls:
+                try:
+                    r = session.get(url, timeout=10)
+                    if r.status_code == 200:
+                        ct = r.headers.get("Content-Type", "").lower()
+                        ext = ".png" if "png" in ct else ".jpg"
+                        save_path = temp_dir / f"{page_num:04d}{ext}"
+                        with open(save_path, "wb") as f:
+                            f.write(r.content)
+                        return page_num, save_path
+                    elif r.status_code == 404:
+                        continue
+                except:
+                    pass
+            return page_num, None
+
+        # Batch Execution Loop
+        downloaded_files = []
+        page = 1
+        batch_size = 20
+        max_pages = 1000 
+        
+        start_time = time.time()
+
+        while page < max_pages:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                chunk_futures = {executor.submit(download_page, p): p for p in range(page, page + batch_size)}
+                
+                chunk_results = {}
+                for future in concurrent.futures.as_completed(chunk_futures):
+                    p_num, path = future.result()
+                    chunk_results[p_num] = path
+                
+                batch_has_data = False
+                for p in range(page, page + batch_size):
+                    if chunk_results.get(p):
+                        downloaded_files.append(chunk_results[p])
+                        batch_has_data = True
+                
+                if not batch_has_data:
+                    break
+                    
+                if page == 1 and not chunk_results.get(1):
+                    emit("ZBY: [WARNING] Page 1 not found. Document might be empty.")
+                    break
+
+                first_missing = -1
+                for p in range(page, page + batch_size):
+                    if not chunk_results.get(p):
+                        first_missing = p
+                        break
+                
+                if first_missing != -1:
+                    break
+                    
+                page += batch_size
+
+        duration = time.time() - start_time
+        emit(f"ZBY: Download finished in {duration:.2f}s. Total Pages: {len(downloaded_files)}")
+
+        if downloaded_files:
+            downloaded_files.sort()
+            emit(f"ZBY: Generating PDF: {output_file}")
+            try:
+                temp_pdf_path = str(output_file) + ".tmp"
+                with open(temp_pdf_path, "wb") as f:
+                    f.write(img2pdf.convert([str(p) for p in downloaded_files]))
+                
+                # Atomic move
+                if Path(temp_pdf_path).exists():
+                    shutil.move(temp_pdf_path, output_file)
+                    
+                emit(f"ZBY: [SUCCESS] PDF Saved to {output_file}")
+                # Cleanup
+                if temp_dir.exists(): shutil.rmtree(temp_dir)
+                return output_file, []
+            except Exception as e:
+                emit(f"ZBY: [ERROR] PDF Generation failed: {e}")
+                
+        # Cleanup
+        if temp_dir.exists(): shutil.rmtree(temp_dir)
         return None
 
     def _download_via_standard_id(self, std_id: str, item: Standard, output_dir: Path, emit: callable):
@@ -719,11 +937,10 @@ class ZBYSource(BaseSource):
             return None
 
         emit("ZBY: 尝试 HTTP 回退提取资源 UUID...")
-        session = requests.Session()
-        session.trust_env = False  # 禁用系统代理
+        session = self.session # 复用 session 以保持 cookie/状态
         session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Referer": self.base_url,
+            "Referer": (self.base_url or "https://bz.zhenggui.vip"),
         })
 
         meta = item.source_meta if isinstance(item.source_meta, dict) else {}
@@ -731,119 +948,149 @@ class ZBYSource(BaseSource):
         # 0) 优先尝试通过官方 API（从 config.yaml 读取到的 BZY_BASE_URL）拿到预览/资源信息
         try:
             api_base = (self.api_base_url or "").strip()
+            # 移除强制回退逻辑，信任用户的配置 (支持私有 API)
+            if not api_base:
+                api_base = "https://login.bz.zhenggui.vip/bzy-api"
+            
+            # 清理 base，移除末尾的 /org (以便统一拼接)
+            if api_base.endswith("/org"):
+                api_base = api_base[:-4]
+
             if api_base:
                 std_id = meta.get('standardId') or meta.get('id')
+                std_num = item.std_no
+                
+                # 打印详细 Meta 数据以供调试
+                print(f"[ZBY TRACE] Meta Detail: {json.dumps(meta, ensure_ascii=False, default=str)[:1000]}")
+                
+                emit(f"ZBY: 尝试通过 API 获取预览资源 (Base: {api_base})...")
+                api_attempts = 0
+                api_status_counts = {}
+                api_sample = ""
+                
+                api_candidates = [
+                    "org/std/search", "std/search",  # Search endpoints
+                    "org/std/detail", "org/std/getDetail", # Detail endpoints
+                    "org/std/resource", "org/std/preview",
+                    "std/detail", "std/getDetail", "std/preview", "std/resource",
+                ]
+                
+                # 构造多种请求体
+                bodies = []
+                # 1. 如果有 ID，尝试 ID 查询
                 if std_id:
-                    emit("ZBY: 尝试通过 API 获取预览资源...")
-                    api_attempts = 0
-                    api_status_counts = {}
-                    api_sample = ""
-                    api_candidates = [
-                        "std/detail",
-                        "std/getDetail",
-                        "std/detailInfo",
-                        "std/getStdDetail",
-                        "std/preview",
-                        "std/previewInfo",
-                        "std/getPreview",
-                        "std/getAliyunPreview",
-                        "std/getDocInfo",
-                        "std/resource",
-                        "std/getResource",
-                    ]
-                    bodies = [
-                        {"params": {"standardId": std_id}, "token": "", "userId": "", "orgId": "", "time": ""},
-                        {"params": {"model": {"standardId": std_id}}, "token": "", "userId": "", "orgId": "", "time": ""},
-                        {"standardId": std_id},
-                        {"id": std_id},
-                    ]
+                    bodies.append({"params": {"standardId": std_id}, "token": "", "userId": "", "orgId": "", "time": ""})
+                    bodies.append({"params": {"model": {"standardId": std_id}}, "token": "", "userId": "", "orgId": "", "time": ""})
+                    bodies.append({"standardId": std_id})
+                    bodies.append({"id": std_id})
+                
+                # 2. 尝试用标准号查询 (模仿 zby_http.py)
+                if std_num:
+                   bodies.append({
+                        "params": {
+                            "pageNo": 1, "pageSize": 10,
+                            "model": {
+                                "standardNum": std_num if '-' in std_num or '/' in std_num else None,
+                                "keyword": std_num,
+                                "searchType": "1"
+                            }
+                        },
+                        "token": "", "userId": "", "orgId": "", "time": ""
+                   })
 
-                    def _scan_for_uuid(obj) -> str:
+                def _scan_for_uuid(obj) -> str:
+                    try:
+                        s = json.dumps(obj, ensure_ascii=False)
+                    except Exception:
+                        s = str(obj)
+                    
+                    # 1) 优先匹配 immdoc/{uuid}/doc
+                    m = re.search(r"immdoc/([a-zA-Z0-9]{32})/doc", s)
+                    if m: return m.group(1)
+                    m = re.search(r"immdoc/([a-zA-Z0-9-]+)/doc", s)
+                    if m: return m.group(1)
+                        
+                    # 2) 再匹配标准 UUID 形式
+                    m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", s, re.I)
+                    if m: return m.group(0)
+                        
+                    # 3) 匹配 32 位纯十六进制 ID
+                    m = re.search(r'\\b[a-f0-9]{32}\\b', s, re.IGNORECASE)
+                    return m.group(0) if m else ""
+
+                headers: dict[str, str] = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                    "Referer": api_base,
+                    "Content-Type": "application/json;charset=UTF-8",
+                }
+                
+                # 去重并执行调用
+                for ep in api_candidates:
+                    base_clean = api_base.rstrip('/')
+                    ep_clean = ep.lstrip('/')
+                    api_url = f"{base_clean}/{ep_clean}"
+                    
+                    for body in bodies:
                         try:
-                            import json as _json
-                            s = _json.dumps(obj, ensure_ascii=False)
-                        except Exception:
-                            s = str(obj)
-                        # 1) 优先匹配 immdoc/{uuid}/doc
-                        m = re.search(r"immdoc/([a-zA-Z0-9-]+)/doc", s)
-                        if m:
-                            return m.group(1)
-                        # 2) 再匹配标准 UUID 形式
-                        m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", s, re.I)
-                        return m.group(0) if m else ""
-
-                    headers: dict[str, str] = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                        "Referer": DEFAULT_BASE_URL,
-                        "Origin": DEFAULT_BASE_URL,
-                        "Content-Type": "application/json;charset=UTF-8",
-                    }
-                    for ep in api_candidates:
-                        api_url = api_base.rstrip('/') + '/' + ep.lstrip('/')
-                        for body in bodies:
-                            try:
-                                api_attempts += 1
-                                rr: Response = session.post(api_url, json=body, headers=headers, timeout=10, proxies={"http": None, "https": None})
-                                status = int(getattr(rr, 'status_code', 0) or 0)
-                                api_status_counts[status] = api_status_counts.get(status, 0) + 1
-                                if status >= 400:
-                                    if not api_sample:
-                                        text = (getattr(rr, 'text', '') or '').strip().replace('\n', ' ')
-                                        api_sample = f"HTTP {status} {ep} {text[:160]}".strip()
-                                    continue
-                                ct = (rr.headers.get('Content-Type') or '').lower()
-                                if 'json' not in ct and not (rr.text and rr.text.strip().startswith('{')):
-                                    continue
+                            api_attempts += 1
+                            print(f"[ZBY TRACE] POST {api_url}")
+                            rr: Response = session.post(api_url, json=body, headers=headers, timeout=10, verify=False)
+                            status = int(getattr(rr, 'status_code', 0) or 0)
+                            api_status_counts[status] = api_status_counts.get(status, 0) + 1
+                            
+                            if status == 200:
                                 j = rr.json()
                                 uuid = _scan_for_uuid(j)
                                 if uuid:
                                     emit(f"ZBY: 从 API 获取到资源 UUID: {uuid[:8]}...")
                                     return download_images_to_pdf(uuid, item.filename(), output_dir, [], emit)
-                                if not api_sample and isinstance(j, dict):
-                                    code = j.get('code') if 'code' in j else j.get('status')
-                                    msg = j.get('msg') if 'msg' in j else j.get('message')
-                                    if code is not None or msg:
-                                        api_sample = f"code={code} msg={str(msg)[:160]}".strip()
-                            except Exception:
-                                continue
-
-                    if api_attempts:
-                        try:
-                            status_summary = '/'.join([f"{k}:{api_status_counts[k]}" for k in sorted(api_status_counts.keys())])
+                            elif status >= 400 and not api_sample:
+                                api_sample = f"HTTP {status}"
                         except Exception:
-                            status_summary = str(api_status_counts)
-                        sample_txt = f"，示例: {api_sample}" if api_sample else ""
-                        emit(f"ZBY: API 未命中 UUID（base=[URL]，尝试{api_attempts}次，HTTP={status_summary}{sample_txt}）")
-        except Exception:
-            pass
+                            continue
+
+                if api_attempts:
+                     status_summary = str(api_status_counts)
+                     emit(f"ZBY: API 未命中 (尝试{api_attempts}次, 状态={status_summary})")
+
+        except Exception as e:
+            import traceback
+            print(f"[ZBY TRACE] API 逻辑异常: {e}")
+            traceback.print_exc()
+            emit(f"ZBY: API 逻辑异常: {e}")
         
         # 1. 尝试通过 standardId 直接访问详情页（SPA 可能只返回壳，但仍保留作为兜底）
         std_id = meta.get('standardId') or meta.get('id')
         if std_id:
+            # 尝试访问前端详情页 (可能包含内嵌 JS 数据)
             detail_urls = [
+                f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}", # 前端路由页
                 f"{self.base_url}/standard/detail/{std_id}",
-                f"{self.base_url}/#/standard/detail/{std_id}",
             ]
+            
             for du in detail_urls:
                 try:
-                    emit(f"ZBY: 检查详情页...")
-                    r: Response = session.get(du, timeout=8, proxies={"http": None, "https": None})
+                    emit(f"ZBY: 检查详情页: {du}")
+                    r: Response = session.get(du, timeout=10, verify=False)
                     if r.status_code == 200:
-                        # 使用工具函数提取 UUID
+                        # 尝试提取所有可能的 UUID
                         uuid = extract_uuid_from_text(r.text)
+                        
+                        # 特殊检查：在 JS 变量中查找 hex ID
+                        if not uuid:
+                            for m in re.finditer(r'["\']([a-f0-9]{32})["\']', r.text, re.IGNORECASE):
+                                potential_id = m.group(1)
+                                if not potential_id.startswith('0000'): 
+                                     # 仅作为尝试
+                                     res = download_images_to_pdf(potential_id, item.filename(), output_dir, [], emit)
+                                     if res: return res
+
                         if uuid:
                             emit(f"ZBY: 从详情页发现资源 UUID: {uuid[:8]}...")
-                            cookies = [{ 'name': c.name, 'value': c.value } for c in session.cookies]
-                            return download_images_to_pdf(uuid, item.filename(), output_dir, cookies, emit)
-
-                        # 尝试提取所有可能的 UUID
-                        uuids = extract_all_uuids_from_text(r.text)
-                        for uid in uuids:
-                            emit(f"ZBY: 尝试提取到的 UUID: {uid[:8]}...")
-                            res = download_images_to_pdf(uid, item.filename(), output_dir, [], emit)
-                            if res: return res
+                            return download_images_to_pdf(uuid, item.filename(), output_dir, [], emit)
                 except Exception:
                     continue
+
 
         # 1. 先检查 meta 中是否存在直接可用的 pdf/文件列表（json api 可能返回）
         try:

@@ -58,7 +58,9 @@ class ZBYAdapter(BaseAdapter):
                 publish_date=std.publish,
                 implement_date=std.implement,
                 status=std.status,
-                replace_std=std.replace_std
+                replace_std=std.replace_std,
+                sources=std.sources if std.sources else [self.source_name],
+                source_meta=std.source_meta
             )
             results.append(model)
         
@@ -71,11 +73,16 @@ class ZBYAdapter(BaseAdapter):
         
         # 内部函数用于在线程池中执行同步下载
         def _download_task():
-            # 需要导入 Standard 类来构造 item 对象
-            from core.models import Standard
-            
-            # 构造最小化的 Standard 对象
-            item = Standard(std_no=std_no, name=std_no, sources=["ZBY"])
+            # 首先搜索获取完整的 Standard 对象（包含 source_meta）
+            try:
+                search_results = self._source.search(std_no)
+                if not search_results:
+                    return None, [f"未找到标准: {std_no}"]
+                
+                # 使用第一个搜索结果（最匹配的）
+                item = search_results[0]
+            except Exception as e:
+                return None, [f"搜索失败: {str(e)}"]
             
             # 调用 ZBYSource.download(item, outdir)
             # 注意: 它返回 DownloadResult 对象

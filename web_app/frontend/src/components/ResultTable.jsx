@@ -39,7 +39,16 @@ const ResultTable = ({
                                     ● {record.status}
                                 </Tag>
                             )}
-                            <Tag>{record.source}</Tag>
+                            {record.has_pdf === false && (
+                                <Tag color="default">
+                                    🚫 无文本
+                                </Tag>
+                            )}
+                            <Space size={4}>
+                                {(record.sources || [record.source]).map(src => (
+                                    <Tag key={src}>{src}</Tag>
+                                ))}
+                            </Space>
                         </Space>
                     </div>
                     {/* 第二行：标准名称 */}

@@ -13,15 +13,6 @@ const SearchBar = ({ onSearch, loading }) => {
 
     return (
         <div>
-            <h1 style={{
-                color: 'white',
-                fontSize: 24,
-                fontWeight: 'bold',
-                textAlign: 'center',
-                marginBottom: 12
-            }}>
-                标准文献检索系统
-            </h1>
             <Space.Compact style={{ width: '100%' }}>
                 <Input
                     size="large"

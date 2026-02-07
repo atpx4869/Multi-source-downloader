@@ -111,6 +111,19 @@ class BaseSource(ABC):
         """
         pass
 
+    @abstractmethod
+    def has_pdf(self, std: "Standard") -> bool:
+        """判断该标准是否有 PDF 可供下载
+        
+        Args:
+            std: Standard 对象
+            
+        Returns:
+            True 表示该源可提供 PDF 下载
+        """
+        pass
+
+
 
 # Type hint 用 strings 避免循环导入
 Standard = Dict[str, Any]

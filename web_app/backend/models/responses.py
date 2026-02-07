@@ -17,6 +17,8 @@ class StandardModel(BaseModel):
     implement_date: Optional[str] = Field(None, description="实施日期")
     status: Optional[str] = Field(None, description="状态（现行/废止）")
     replace_std: Optional[str] = Field(None, description="替代标准")
+    sources: List[str] = Field(default_factory=list, description="数据来源列表")
+    source_meta: dict = Field(default_factory=dict, description="源特定元数据")
     
     class Config:
         json_schema_extra = {
@@ -24,6 +26,7 @@ class StandardModel(BaseModel):
                 "std_no": "GB/T 3324-2017",
                 "name": "木家具通用技术条件",
                 "source": "ZBY",
+                "sources": ["ZBY", "GBW"],
                 "has_pdf": True,
                 "publish_date": "2017-05-12",
                 "status": "现行"

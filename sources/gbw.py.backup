@@ -7,7 +7,7 @@ import re
 import requests
 from pathlib import Path
 from typing import List, Callable
-from core.models import Standard
+from models import Standard
 
 # Import the proven download logic
 from sources.gbw_download import download_with_ocr, get_hcno
@@ -26,7 +26,7 @@ class GBWSource:
     def __init__(self):
         self.name = "GBW"
         self.base_url = "https://std.samr.gov.cn"  # For search API
-        self.download_base = "http://c.gb688.cn"  # For download
+        self.download_base = "https://openstd.samr.gov.cn"  # For download
         
         # Create session with optimized settings
         self.session = requests.Session()
@@ -86,39 +86,26 @@ class GBWSource:
             results = []
             for row in data.get("rows", []):
                 try:
-                    # Parse standard code (field name is C_STD_CODE, not standardNo)
-                    std_no = self._parse_std_code(row.get("C_STD_CODE", ""))
+                    # Parse standard code
+                    std_no = self._parse_std_code(row.get("standardNo", ""))
                     if not std_no:
                         continue
                     
-                    # Extract metadata (field names differ from documentation)
-                    name = self._clean_text(row.get("C_C_NAME", ""))
+                    # Extract metadata
+                    name = self._clean_text(row.get("chName", ""))
                     item_id = row.get("id", "")
-                    status = self._clean_text(row.get("STATE", ""))
+                    hcno = row.get("hcno", "")  # Some results include HCNO directly
                     
-                    # Heuristic: Current and upcoming standards usually have PDF preview/download
-                    # Standard status in GBW: "现行", "即将实施", "废止", etc.
-                    has_pdf_hint = status in ["现行", "即将实施"]
-                    
-                    # 过滤逻辑：只有当标准号或名称中包含关键词时才返回
-                    # GBW 后台在结果不足时会返回不相关的“最新标准”
-                    kw_lower = keyword.lower()
-                    if kw_lower not in std_no.lower() and kw_lower not in name.lower() and kw_lower.replace("-", "") not in std_no.lower().replace("-", ""):
-                        continue
-
                     # Create Standard object
                     standard = Standard(
                         std_no=std_no,
                         name=name,
-                        status=status,
-                        has_pdf=has_pdf_hint,
                         source_meta={
                             "id": item_id,
-                            "status": status,
-                            "publish_date": row.get("ISSUE_DATE", ""),  # 发布日期
-                            "implement_date": row.get("ACT_DATE", ""),  # 实施日期
-                            "nature": row.get("STD_NATURE", ""),  # 标准性质
-                            "_has_pdf": has_pdf_hint,  # Store hint in meta for aggregator
+                            "hcno": hcno,
+                            "status": self._clean_text(row.get("state", "")),
+                            "publish_date": row.get("actDate", ""),
+                            "implement_date": row.get("executeDate", ""),
                         },
                         sources=["GBW"]
                     )
@@ -143,55 +130,26 @@ class GBWSource:
             print(f"GBW: Failed to get HCNO: {e}")
             return ""
     
-    def has_pdf(self, item: Standard) -> bool:
-        """
-        Check if a standard has downloadable PDF by detecting download button and copyright restrictions.
-        """
-        try:
-            # Extract or fetch HCNO
-            hcno = item.source_meta.get("hcno") if isinstance(item.source_meta, dict) else None
-            if not hcno:
-                item_id = item.source_meta.get("id") if isinstance(item.source_meta, dict) else None
-                if not item_id: return False
-                hcno = self._get_hcno(item_id)
-            
-            if not hcno: return False
-            
-            # Check showGb on download base (c.gb688.cn) as it's the definitive source
-            # We check both online and download types
-            for gbw_type in ["online", "download"]:
-                url = f"{self.download_base}/bzgk/gb/showGb?type={gbw_type}&hcno={hcno}"
-                try:
-                    resp = self.session.get(url, timeout=10)
-                    if resp.status_code == 200:
-                        html = resp.text.lower()
-                        # Keywords representing "no text"
-                        restricted_keywords = ["版权保护", "暂不提供在线阅读", "部分正在整理中", "采用了ISO", "采用了IEC", "国际国外组织的标准"]
-                        if any(kw.lower() in html for kw in restricted_keywords):
-                            return False
-                        
-                        # 检测下载或阅读按钮
-                        positive_keywords = ["下载标准", "xz_btn", "在线预览", "yl_btn", "阅读标准"]
-                        if any(kw.lower() in html for kw in positive_keywords):
-                            return True
-                except Exception:
-                    continue
-            
-            return False
-            
-        except Exception as e:
-            print(f"GBW: Error checking PDF availability: {e}")
-            return False
-    
-    def download(self, item: Standard, output_dir: Path, emit: Callable = print) -> "DownloadResult":
+    def download(self, item: Standard, output_dir: Path, emit: Callable = print) -> tuple[Path | None, list[str]]:
         """
         Download a standard from GBW using proven OCR-based approach.
+        
+        Args:
+            item: Standard object with metadata
+            output_dir: Output directory for downloaded file
+            emit: Logging callback function
+            
+        Returns:
+            Tuple of (downloaded_file_path, logs)
         """
-        from sources.base import DownloadResult
         logs = []
         
-        # Extract HCNO
-        hcno = item.source_meta.get("hcno") if isinstance(item.source_meta, dict) else None
+        # Extract HCNO from metadata
+        hcno = None
+        if isinstance(item.source_meta, dict):
+            hcno = item.source_meta.get("hcno")
+        
+        # If HCNO not in metadata, fetch from detail page
         if not hcno:
             item_id = item.source_meta.get("id") if isinstance(item.source_meta, dict) else None
             if item_id:
@@ -199,17 +157,9 @@ class GBWSource:
                 hcno = self._get_hcno(item_id)
         
         if not hcno:
-            msg = "GBW: 无法获取 HCNO，下载失败"
-            emit(msg)
-            return DownloadResult.fail(msg, logs)
+            emit("GBW: 无法获取 HCNO，下载失败")
+            return None, logs
         
-        # 预检详情页确认是否有下载权限（由 download_with_ocr 内部处理更准确）
-        # 但我们可以在这里做一个快速的 has_pdf 检查来提前拦截
-        if not self.has_pdf(item):
-            msg = "GBW: 该标准受版权保护或不提供在线阅读/下载，已自动跳过。"
-            emit(msg)
-            return DownloadResult.fail(msg, logs)
-
         # Use proven download logic from gbw_download.py
         outfile = output_dir / item.filename()
         emit(f"GBW: 开始下载 {item.std_no}...")
@@ -226,17 +176,14 @@ class GBWSource:
             
             if success:
                 emit(f"GBW: 下载成功 -> {outfile}")
-                return DownloadResult.ok(outfile, logs)
+                return outfile, logs
             else:
-                msg = "GBW: 下载失败（OCR 验证码识别失败或文件不可用）"
-                emit(msg)
-                return DownloadResult.fail(msg, logs)
+                emit("GBW: 下载失败（OCR 验证码识别失败或文件不可用）")
+                return None, logs
                 
         except Exception as e:
-            msg = f"GBW: 下载异常: {e}"
-            emit(msg)
-            return DownloadResult.fail(msg, logs)
-
+            emit(f"GBW: 下载异常: {e}")
+            return None, logs
     
     def is_available(self, timeout: int = 6) -> bool:
         """Check if GBW service is accessible"""

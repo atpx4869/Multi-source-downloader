@@ -25,29 +25,46 @@ body {
   display: flex !important;
   flex-wrap: nowrap !important;
   width: 100% !important;
+  height: calc(100vh - 64px - 82px) !important; /* Header (64px) + SearchBar area (~82px) */
+  overflow: hidden;
 }
 
-.sidebar-left {
+.sidebar-left, .sidebar-right {
   flex: 0 0 280px !important;
   max-width: 280px !important;
   min-width: 280px !important;
+  overflow-y: auto !important;
+  padding-right: 4px;
 }
 
 .content-center {
   flex: 1 1 auto !important;
   min-width: 0 !important;
+  overflow-y: auto !important;
+  height: 100% !important;
+  padding: 0 4px;
 }
 
-.sidebar-right {
-  flex: 0 0 280px !important;
-  max-width: 280px !important;
-  min-width: 280px !important;
+/* 隐藏滚动条但保留功能 (可选，为了美观) */
+.sidebar-left::-webkit-scrollbar,
+.sidebar-right::-webkit-scrollbar,
+.content-center::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-left::-webkit-scrollbar-thumb,
+.sidebar-right::-webkit-scrollbar-thumb,
+.content-center::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
 }
 
 /* 响应式：小屏幕时垂直堆叠 */
 @media (max-width: 768px) {
   .main-content-row {
     flex-wrap: wrap !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
   .sidebar-left,
@@ -56,5 +73,7 @@ body {
     flex: 0 0 100% !important;
     max-width: 100% !important;
     min-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 }

@@ -24,25 +24,6 @@ def set_download_service(service):
     download_service = service
 
 
-@router.post("/{source}/{std_no:path}", response_model=DownloadResponse)
-async def download_from_source(
-    source: str,
-    std_no: str,
-    output_dir: Optional[str] = Query(None, description="输出目录")
-):
-    """
-    从指定数据源下载标准
-    
-    - **source**: 数据源名称（ZBY/GBW/BY）
-    - **std_no**: 标准编号（支持包含斜杠的标准号，如 GB/T 3324-2017）
-    - **output_dir**: 可选，输出目录
-    """
-    if not download_service:
-        raise HTTPException(status_code=500, detail="下载服务未初始化")
-    
-    return await download_service.download(source, std_no, output_dir)
-
-
 @router.post("/first/{std_no:path}", response_model=DownloadResponse)
 async def download_first_available(
     std_no: str,
@@ -60,6 +41,25 @@ async def download_first_available(
         raise HTTPException(status_code=500, detail="下载服务未初始化")
     
     return await download_service.download_first_available(std_no, output_dir)
+
+
+@router.post("/{source}/{std_no:path}", response_model=DownloadResponse)
+async def download_from_source(
+    source: str,
+    std_no: str,
+    output_dir: Optional[str] = Query(None, description="输出目录")
+):
+    """
+    从指定数据源下载标准
+    
+    - **source**: 数据源名称（ZBY/GBW/BY）
+    - **std_no**: 标准编号（支持包含斜杠的标准号，如 GB/T 3324-2017）
+    - **output_dir**: 可选，输出目录
+    """
+    if not download_service:
+        raise HTTPException(status_code=500, detail="下载服务未初始化")
+    
+    return await download_service.download(source, std_no, output_dir)
 
 
 @router.get("/check-cache/{std_no:path}")

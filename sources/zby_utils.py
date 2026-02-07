@@ -28,13 +28,23 @@ def extract_uuid_from_text(text: str) -> Optional[str]:
     if not text:
         return None
 
-    # 优先匹配 immdoc/{uuid}/doc 格式
+    # 优先匹配 immdoc/{uuid}/doc 格式 (URL 路径)
+    match = re.search(r'immdoc/([a-zA-Z0-9]{32})/doc', text)
+    if match:
+        return match.group(1)
+
+    # 兼容旧格式 immdoc/{uuid}/doc (带短横线)
     match = re.search(r'immdoc/([a-zA-Z0-9-]+)/doc', text)
     if match:
         return match.group(1)
 
     # 备选：匹配标准 UUID 格式
     match = re.search(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', text, re.IGNORECASE)
+    if match:
+        return match.group(0)
+
+    # 备选：匹配 32 位纯十六进制 ID (如 60b0afbe9d9c425698e9b91995922d28)
+    match = re.search(r'\b[a-f0-9]{32}\b', text, re.IGNORECASE)
     if match:
         return match.group(0)
 
@@ -98,6 +108,7 @@ def download_images_to_pdf(
         return None
 
     def log(msg: str):
+        print(f"[ZBY DEBUG] {msg}")  # 强制输出到终端
         if emit:
             emit(msg)
         logger.info(msg)
@@ -130,42 +141,95 @@ def download_images_to_pdf(
         # 创建 session
         session = requests.Session()
         session.trust_env = False
+        # 设置连接池大小
+        adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+        session.mount('https://', adapter)
+        session.mount('http://', adapter)
 
-        # 下载所有页面
         imgs = []
-        page_num = 1
-        max_pages = 1000  # 防止无限循环
+        import concurrent.futures
 
-        while page_num <= max_pages:
-            try:
-                url = f"https://resource.zhenggui.vip/immdoc/{uuid}/doc/I/{page_num}"
-                resp = session.get(
-                    url,
-                    cookies=cookies_dict,
-                    timeout=15,
-                    proxies={"http": None, "https": None}
-                )
+        def download_page(page_num):
+            retries = 3
+            backoff = 1.0  # 初始退避 1 秒
+            
+            for attempt in range(retries):
+                try:
+                    url = f"https://resource.zhenggui.vip/immdoc/{uuid}/doc/I/{page_num}"
+                    resp = session.get(
+                        url,
+                        cookies=cookies_dict,
+                        timeout=15,
+                        proxies={"http": None, "https": None}
+                    )
+                    
+                    if resp.status_code == 200 and resp.content:
+                        img_path = temp_dir / f"{page_num:04d}.jpg"
+                        with open(img_path, 'wb') as f:
+                            f.write(resp.content)
+                        return page_num, str(img_path)
+                    
+                    # 详细记录非200状态码
+                    log(f"ZBY DEBUG: Page {page_num} attempt {attempt+1}/{retries} failed. Status: {resp.status_code}")
+                    
+                    # 如果遇到 429 Too Many Requests，增加等待时间
+                    if resp.status_code == 429:
+                        wait_time = backoff * 2
+                        log(f"ZBY DEBUG: 触发限流(429)，等待 {wait_time}s...")
+                        time.sleep(wait_time)
+                        
+                except Exception as e:
+                    # 记录具体的异常信息
+                    log(f"ZBY DEBUG: Page {page_num} attempt {attempt+1}/{retries} exception: {str(e)}")
+                
+                # 指数退避等待（如果是最后一次尝试则不等待）
+                if attempt < retries - 1:
+                    import time
+                    import random
+                    sleep_time = backoff * (2 ** attempt) + random.uniform(0, 1)
+                    # log(f"ZBY DEBUG: Retrying page {page_num} in {sleep_time:.2f}s...")
+                    time.sleep(sleep_time)
+            
+            log(f"ZBY ERROR: Page {page_num} failed after {retries} attempts.")
+            return page_num, None
 
-                if resp.status_code != 200 or not resp.content:
+        # 批量并发下载
+        batch_size = 20
+        current_page = 1
+        max_pages = 1000
+        all_downloaded = True
+        
+        while current_page <= max_pages:
+            end_page = current_page + batch_size
+            log(f"ZBY: 正在下载第 {current_page}-{end_page-1} 页...")
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(download_page, p): p for p in range(current_page, end_page)}
+                
+                # 收集本批次结果
+                batch_results = {}
+                for future in concurrent.futures.as_completed(futures):
+                    p, path = future.result()
+                    batch_results[p] = path
+            
+            # 检查本批次是否全部成功
+            # 注意：如果中间某页失败，说明文档结束
+            found_end = False
+            for p in range(current_page, end_page):
+                if batch_results.get(p):
+                    imgs.append(batch_results[p])
+                else:
+                    # 发现某一页下载失败，认为文档结束
+                    found_end = True
                     break
-
-                # 保存图片
-                img_path = temp_dir / f"{page_num:04d}.jpg"
-                with open(img_path, 'wb') as f:
-                    f.write(resp.content)
-                imgs.append(str(img_path))
-
-                # 每 5 页输出一次进度
-                if page_num % 5 == 0:
-                    log(f"ZBY: 已下载 {page_num} 页")
-
-                page_num += 1
-
-            except Exception as e:
-                log(f"ZBY: 第 {page_num} 页下载失败: {e}")
+            
+            if found_end:
                 break
+                
+            current_page += batch_size
 
         # 合成 PDF
+        imgs.sort() # 确保按文件名排序
         if imgs:
             log(f"ZBY: 共 {len(imgs)} 页，正在合成PDF...")
             output_path = output_dir / filename

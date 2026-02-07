@@ -100,4 +100,46 @@ export const healthAPI = {
     },
 };
 
+// 标准查新API
+export const standardCheckAPI = {
+    // 上传文件并开始处理
+    upload: async (file, sources = ['ZBY'], stdColumn = null) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('sources', sources.join(','));
+        if (stdColumn) {
+            formData.append('std_column', stdColumn);
+        }
+        const response = await apiClient.post('/standard-check/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    // 获取任务状态
+    getStatus: async (taskId) => {
+        const response = await apiClient.get(`/standard-check/status/${taskId}`);
+        return response.data;
+    },
+
+    // 下载Excel结果
+    getDownloadUrl: (taskId) => {
+        return `${API_BASE_URL}/standard-check/download/${taskId}`;
+    },
+
+    // 下载CSV结果
+    getDownloadCSVUrl: (taskId) => {
+        return `${API_BASE_URL}/standard-check/download-csv/${taskId}`;
+    },
+};
+
+// 批量操作API
+export const batchAPI = {
+    // 解析标准号列表
+    resolve: async (stdIds) => {
+        const response = await apiClient.post('/batch/resolve', stdIds);
+        return response.data;
+    },
+};
+
 export default apiClient;
