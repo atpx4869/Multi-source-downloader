@@ -26,7 +26,7 @@ def _cache_key(method: str, url: str, params: Optional[Dict[str, Any]], json_bod
 
 def call_api(session: Optional[requests.Session], method: str, url: str, *, params: Optional[Dict[str, Any]] = None,
              json_body: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None,
-             timeout: int = 10, retries: int = 2, backoff: float = 0.3, use_cache: bool = False, verify_ssl: bool = False) -> Optional[Any]:
+             timeout: Any = 10, retries: int = 2, backoff: float = 0.3, use_cache: bool = False, verify_ssl: bool = False) -> Optional[Any]:
     """Call an HTTP API and return parsed JSON or None on failure.
 
     Adds retry with exponential backoff and a very small simple cache when `use_cache` is True.

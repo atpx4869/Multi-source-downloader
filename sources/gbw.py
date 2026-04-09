@@ -29,12 +29,32 @@ class GBWSource:
         self.download_base = "http://c.gb688.cn"  # For download
         
         # Create session with optimized settings
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
         self.session = requests.Session()
         self.session.trust_env = False  # Ignore system proxy
         self.session.proxies = {"http": None, "https": None}
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
+        
+        # 增加强大的重试策略
+        retry_strategy = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+        )
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=10,
+            pool_maxsize=10
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
     
     def _clean_text(self, text: str) -> str:
         """Clean XML tags from text, preserving inner content"""
@@ -163,7 +183,7 @@ class GBWSource:
             for gbw_type in ["online", "download"]:
                 url = f"{self.download_base}/bzgk/gb/showGb?type={gbw_type}&hcno={hcno}"
                 try:
-                    resp = self.session.get(url, timeout=10)
+                    resp = self.session.get(url, timeout=(5, 10))
                     if resp.status_code == 200:
                         html = resp.text.lower()
                         # Keywords representing "no text"
