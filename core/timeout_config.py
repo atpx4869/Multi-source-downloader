@@ -8,27 +8,27 @@
 # 数据源超时配置（秒）
 TIMEOUT_CONFIG = {
     "BY": {
-        "search": 5,       # 内网访问，应该很快
-        "download": 5,     # 内网下载，快速
-        "detail": 3,       # 详情页获取
+        "search": 10,       # 内网访问，应该很快
+        "download": 10,     # 内网下载，快速
+        "detail": 5,       # 详情页获取
     },
     "GBW": {
-        "search": 10,      # 外网访问，可能较慢
+        "search": 20,      # 外网访问，可能较慢
         "download": 30,    # 外网下载 + OCR 处理需要时间
-        "detail": 5,       # 详情页获取
-        "pdf_check": 5,    # PDF 可用性检查
+        "detail": 10,       # 详情页获取
+        "pdf_check": 10,    # PDF 可用性检查
     },
     "ZBY": {
-        "search": 10,      # 外网访问，可能较慢
-        "download": 20,    # 外网下载
-        "detail": 8,       # 详情页获取
-        "api": 8,          # API 调用
+        "search": 25,      # 外网访问，可能较慢
+        "download": 30,    # 外网下载
+        "detail": 15,       # 详情页获取
+        "api": 15,          # API 调用
     },
 }
 
 # 并行操作超时配置（秒）
 PARALLEL_TIMEOUT = {
-    "search_total": 15,      # 并行搜索总超时（应该 >= max(单源搜索超时)）
+    "search_total": 35,      # 并行搜索总超时（应该 >= max(单源搜索超时)）
     "download_total": 60,    # 并行下载总超时（应该 >= max(单源下载超时)）
 }
 

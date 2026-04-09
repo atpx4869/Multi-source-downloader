@@ -29,7 +29,7 @@ async def search_all_sources(
     q: str = Query(..., description="搜索关键词", min_length=1),
     sources: Optional[List[str]] = Query(None, description="指定数据源（ZBY/GBW/BY）"),
     limit: Optional[int] = Query(100, description="每个源的最大结果数", ge=1, le=500),
-    timeout: Optional[int] = Query(15, description="超时时间（秒）", ge=1, le=60)
+    timeout: Optional[int] = Query(30, description="超时时间（秒）", ge=1, le=60)
 ):
     """
     在所有或指定数据源中搜索标准
@@ -70,7 +70,7 @@ async def search_single_source(
     source: str,
     q: str = Query(..., description="搜索关键词", min_length=1),
     limit: Optional[int] = Query(100, description="最大结果数", ge=1, le=500),
-    timeout: Optional[int] = Query(15, description="超时时间（秒）", ge=1, le=60)
+    timeout: Optional[int] = Query(30, description="超时时间（秒）", ge=1, le=60)
 ):
     """
     在指定数据源中搜索
@@ -90,7 +90,7 @@ async def search_single_source(
 async def search_first_available(
     q: str = Query(..., description="搜索关键词", min_length=1),
     limit: Optional[int] = Query(100, description="最大结果数", ge=1, le=500),
-    timeout: Optional[int] = Query(15, description="超时时间（秒）", ge=1, le=60)
+    timeout: Optional[int] = Query(30, description="超时时间（秒）", ge=1, le=60)
 ):
     """
     按优先级搜索，返回第一个成功的结果
