@@ -109,11 +109,11 @@ class ZBYAdapter(BaseAdapter):
         try:
             # 简单搜索测试
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
+            await loop.run_in_executor(
                 None,
                 self._source.search,
                 "GB"
             )
             return True
-        except:
+        except Exception:
             return False

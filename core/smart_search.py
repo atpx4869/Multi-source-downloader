@@ -8,7 +8,7 @@
 """
 import re
 import concurrent.futures
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 from functools import lru_cache
 
 if TYPE_CHECKING:

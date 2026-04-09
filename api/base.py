@@ -3,10 +3,10 @@
 Base API Interface - 基础 API 接口定义
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable
+from typing import Optional, Callable
 from api.models import (
-    SourceType, StandardInfo, SearchResponse, 
-    DownloadResponse, DownloadStatus, SourceHealth
+    SourceType, SearchResponse, 
+    DownloadResponse, SourceHealth
 )
 
 

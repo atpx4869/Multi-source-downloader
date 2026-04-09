@@ -5,7 +5,7 @@ BY Source - 标院内网标准管理系统 (http://172.16.100.72:8080)
 import re
 import requests
 from pathlib import Path
-from typing import List, Callable, Optional, Dict, Any
+from typing import List, Callable, Dict
 import logging
 
 from core.models import Standard

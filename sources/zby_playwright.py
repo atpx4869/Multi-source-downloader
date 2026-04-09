@@ -5,10 +5,8 @@ ZBY Source - Playwright-based implementation (CLEAN REWRITE)
 import re
 import time
 import requests
-import shutil
-import img2pdf
 from pathlib import Path
-from typing import List, Callable, Optional, Union
+from typing import List, Callable, Optional
 from .zby_utils import download_images_to_pdf
 from core.models import Standard
 

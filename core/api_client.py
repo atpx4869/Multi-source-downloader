@@ -4,12 +4,10 @@ API 客户端 - 支持本地和远程两种模式
 """
 import requests
 from typing import List, Dict, Optional, Tuple, Any
-from pathlib import Path
-import json
 
 from api.router import APIRouter
-from api.models import SearchResponse, DownloadResponse, SourceType, HealthResponse
-from core.api_config import APIMode, get_api_config
+from api.models import SourceType
+from core.api_config import get_api_config
 
 
 class APIClient:

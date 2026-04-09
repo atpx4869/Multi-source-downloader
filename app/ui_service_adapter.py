@@ -29,7 +29,7 @@ except ImportError:
 
 from core import (
     DownloadService, SearchService, TaskEvent, TaskStatus,
-    DownloadTask, SearchTask
+    DownloadTask
 )
 from core.models import Standard
 

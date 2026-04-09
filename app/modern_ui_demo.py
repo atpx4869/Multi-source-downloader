@@ -14,13 +14,13 @@ sys.path.insert(0, str(project_root))
 try:
     from PySide6 import QtCore, QtWidgets, QtGui
 except ImportError:
-    from PySide2 import QtCore, QtWidgets, QtGui
+    from PySide2 import QtCore, QtWidgets
 
 from app.modern_widgets import (
-    ModernCard, ResultCard, ModernSearchBar, 
-    FloatingActionButton, SourceSelector, ModernLogViewer
+    ResultCard, ModernSearchBar, 
+    SourceSelector, ModernLogViewer
 )
-from app.animations import AnimationManager, LoadingSpinner
+from app.animations import AnimationManager
 
 
 class ModernUIDemo(QtWidgets.QMainWindow):

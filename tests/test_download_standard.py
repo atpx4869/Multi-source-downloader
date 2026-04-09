@@ -11,7 +11,6 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from core.aggregated_downloader import AggregatedDownloader
-from core.models import Standard
 
 
 def test_download_standard(std_no: str = "GB/T28478-2024"):
@@ -95,7 +94,7 @@ def test_download_standard(std_no: str = "GB/T28478-2024"):
         file_path, logs = downloader.download(target, prefer_order=prefer_sources or ["GBW", "BY", "ZBY"])
         
         if file_path:
-            print(f"   OK 下载成功!")
+            print("   OK 下载成功!")
             print(f"      文件: {Path(file_path).name}")
             print(f"      大小: {Path(file_path).stat().st_size / (1024*1024):.2f} MB")
             
@@ -107,7 +106,7 @@ def test_download_standard(std_no: str = "GB/T28478-2024"):
             
             return True
         else:
-            print(f"   FAIL 下载失败")
+            print("   FAIL 下载失败")
             if logs:
                 print("\n   错误日志:")
                 for log in logs[-5:]:

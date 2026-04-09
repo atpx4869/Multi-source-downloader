@@ -6,19 +6,16 @@ This module avoids importing Playwright at module-import time so it is safe
 to include in frozen executables. If Playwright is needed it will be loaded
 only at runtime by explicit callers.
 """
-import asyncio
 import re
 import json
 import logging
 import random
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
-from urllib.parse import quote
+from typing import List, Union
 import tempfile
 import shutil
 import os
 import urllib3
-import logging
 
 # 抑制 urllib3 的 SSL 验证警告（我们故意禁用 SSL 验证以兼容国内网站）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,9 +41,7 @@ from .base import BaseSource, DownloadResult
 from .registry import registry
 from .zby_utils import (
     extract_uuid_from_text,
-    extract_all_uuids_from_text,
-    download_images_to_pdf,
-    sanitize_log_message
+    download_images_to_pdf
 )
 
 # 导入超时配置
@@ -268,7 +263,7 @@ class ZBYSource(BaseSource):
                         verify=False  # 禁用 SSL 验证（国内站点常见问题）
                     )
                     return 200 <= getattr(r, 'status_code', 0) < 400
-                except Exception as e:
+                except Exception:
                     # 备用方案：尝试连接 API 端点
                     try:
                         api_url = "https://login.bz.zhenggui.vip/bzy-api/org/std/search"
@@ -433,7 +428,7 @@ class ZBYSource(BaseSource):
                                 impl_date = str(impl)[:10]
                                 if impl_date and impl_date < datetime.now().strftime('%Y-%m-%d'):
                                     status = '现行'
-                            except:
+                            except Exception:
                                 pass
                         
                         # 提取替代标准信息
@@ -449,7 +444,7 @@ class ZBYSource(BaseSource):
                             try:
                                 from core.replacement_db import get_replacement_standard
                                 replace_std = get_replacement_standard(std_no)
-                            except:
+                            except Exception:
                                 pass
                         
                         meta = row
@@ -598,7 +593,7 @@ class ZBYSource(BaseSource):
         # 3. Get UUID
         has_pdf_hint = meta.get("_has_pdf", meta.get("hasPdf", True))
         if not has_pdf_hint and has_pdf_hint is not None:
-             emit(f"ZBY: [INFO] Standard metadata indicates no PDF available (hasPdf=0). Skipping UUID extraction.")
+             emit("ZBY: [INFO] Standard metadata indicates no PDF available (hasPdf=0). Skipping UUID extraction.")
              uuid, page_count, pdf_name = None, 0, ""
         else:
              uuid, page_count, pdf_name = self._get_uuid_via_api(std_id, emit)
@@ -791,7 +786,7 @@ class ZBYSource(BaseSource):
                         return page_num, save_path
                     elif r.status_code == 404:
                         continue
-                except:
+                except Exception:
                     pass
             return page_num, None
 
@@ -908,7 +903,7 @@ class ZBYSource(BaseSource):
             pdf_links = re.findall(r'(https?://[^\s"<>]+\.pdf)', html, re.IGNORECASE)
             for pdf_url in pdf_links:
                 try:
-                    emit(f"ZBY: 尝试直接下载 PDF 链接...")
+                    emit("ZBY: 尝试直接下载 PDF 链接...")
                     r = session.get(pdf_url, timeout=20, stream=True, proxies={"http": None, "https": None})
                     if r.status_code == 200:
                         output_path = output_dir / item.filename()
@@ -917,12 +912,12 @@ class ZBYSource(BaseSource):
                             for chunk in r.iter_content(8192):
                                 if chunk:
                                     f.write(chunk)
-                        emit(f"ZBY: PDF 下载成功")
+                        emit("ZBY: PDF 下载成功")
                         return output_path, []
                 except Exception:
                     continue
 
-            emit(f"ZBY: 从详情页无法提取到文档资源")
+            emit("ZBY: 从详情页无法提取到文档资源")
             return None
 
         except Exception as e:
@@ -1179,7 +1174,7 @@ class ZBYSource(BaseSource):
                         for did in detail_ids[:5]: # 只尝试前5个
                             detail_url = f"{self.base_url}/standard/detail/{did}"
                             try:
-                                emit(f"ZBY: 尝试跟进详情页...")
+                                emit("ZBY: 尝试跟进详情页...")
                                 rd: Response = session.get(detail_url, timeout=8, proxies={"http": None, "https": None})
                                 td = getattr(rd, 'text', '') or ''
                                 uuid2 = extract_uuid_from_text(td)

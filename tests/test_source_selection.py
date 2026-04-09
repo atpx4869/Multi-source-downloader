@@ -42,7 +42,7 @@ def test_gbw_only():
             sources=sources
         )
         
-        print(f"\n搜索统计:")
+        print("\n搜索统计:")
         print(f"  - 关键词: {keyword}")
         print(f"  - 指定源: {sources}")
         print(f"  - 实际使用的源: {metadata['sources_used']}")
@@ -95,7 +95,7 @@ def test_multiple_sources():
             sources=sources
         )
         
-        print(f"\n搜索统计:")
+        print("\n搜索统计:")
         print(f"  - 关键词: {keyword}")
         print(f"  - 指定源: {sources}")
         print(f"  - 实际使用的源: {metadata['sources_used']}")

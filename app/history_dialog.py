@@ -10,7 +10,7 @@ try:
     from PySide6 import QtCore, QtWidgets, QtGui
     PYSIDE_VER = 6
 except ImportError:
-    from PySide2 import QtCore, QtWidgets, QtGui
+    from PySide2 import QtCore, QtWidgets
     PYSIDE_VER = 2
 
 from core.cache_manager import get_cache_manager

@@ -33,7 +33,7 @@ def test_initialization():
 
     try:
         downloader = AggregatedDownloader(output_dir="downloads")
-        print(f"✓ 初始化成功")
+        print("✓ 初始化成功")
         print(f"✓ 加载的源数量: {len(downloader.sources)}")
         print(f"✓ 源列表: {[src.name for src in downloader.sources]}")
 
@@ -66,25 +66,25 @@ def test_search(downloader):
 
         results = downloader.search(keyword, parallel=True)
 
-        print(f"✓ 搜索完成")
+        print("✓ 搜索完成")
         print(f"✓ 结果数量: {len(results)}")
 
         if len(results) > 0:
             # 检查返回类型
             first_result = results[0]
-            print(f"\n检查第一个结果:")
+            print("\n检查第一个结果:")
             print(f"  - 类型: {type(first_result).__name__}")
             print(f"  - 是否为 UnifiedStandard: {isinstance(first_result, UnifiedStandard)}")
             print(f"  - 标准号: {first_result.std_no}")
             print(f"  - 名称: {first_result.name[:50]}..." if len(first_result.name) > 50 else f"  - 名称: {first_result.name}")
 
             # 测试新字段名
-            print(f"\n测试新字段名:")
+            print("\n测试新字段名:")
             print(f"  - publish_date: {first_result.publish_date}")
             print(f"  - implement_date: {first_result.implement_date}")
 
             # 测试向后兼容（旧字段名）
-            print(f"\n测试向后兼容（旧字段名）:")
+            print("\n测试向后兼容（旧字段名）:")
             print(f"  - publish: {first_result.publish}")
             print(f"  - implement: {first_result.implement}")
 
@@ -93,7 +93,7 @@ def test_search(downloader):
             assert first_result.implement == first_result.implement_date, "向后兼容失败"
 
             # 测试新方法
-            print(f"\n测试新方法:")
+            print("\n测试新方法:")
             print(f"  - display_label(): {first_result.display_label()[:60]}...")
             print(f"  - filename(): {first_result.filename()[:60]}...")
             print(f"  - get_primary_source(): {first_result.get_primary_source()}")
@@ -155,14 +155,14 @@ def test_merge_logic(downloader):
         downloader._merge_items(combined, [test_items[0]], "GBW")
         downloader._merge_items(combined, [test_items[1]], "BY")
 
-        print(f"✓ 合并前: 2 个项目")
+        print("✓ 合并前: 2 个项目")
         print(f"✓ 合并后: {len(combined)} 个项目")
 
         # 验证合并结果
         assert len(combined) == 1, "相同标准号应该合并为一个"
 
         merged_item = list(combined.values())[0]
-        print(f"\n合并后的项目:")
+        print("\n合并后的项目:")
         print(f"  - 标准号: {merged_item.std_no}")
         print(f"  - 名称: {merged_item.name}")
         print(f"  - 数据源: {merged_item.sources}")
@@ -171,7 +171,7 @@ def test_merge_logic(downloader):
         # 验证合并逻辑
         assert "GBW" in merged_item.sources, "应包含 GBW 源"
         assert "BY" in merged_item.sources, "应包含 BY 源"
-        assert merged_item.has_pdf == True, "任一源有 PDF 则应为 True"
+        assert merged_item.has_pdf, "任一源有 PDF 则应为 True"
         assert "更长的名称" in merged_item.name, "应保留更长的名称"
 
         print("\n✅ 合并逻辑测试通过")
@@ -202,11 +202,11 @@ def test_backward_compatibility():
             has_pdf=True
         )
 
-        print(f"✓ 使用新字段名创建成功")
+        print("✓ 使用新字段名创建成功")
         print(f"  - std_no: {std.std_no}")
 
         # 测试向后兼容：通过旧字段名访问
-        print(f"\n测试向后兼容（通过旧字段名访问）:")
+        print("\n测试向后兼容（通过旧字段名访问）:")
         print(f"  - publish (旧): {std.publish}")
         print(f"  - implement (旧): {std.implement}")
         print(f"  - publish_date (新): {std.publish_date}")
@@ -219,7 +219,7 @@ def test_backward_compatibility():
         assert std.implement == std.implement_date, "旧字段名应该映射到新字段名"
 
         # 测试通过旧字段名设置值
-        print(f"\n测试通过旧字段名设置值:")
+        print("\n测试通过旧字段名设置值:")
         std.publish = "2024-01-01"
         std.implement = "2024-07-01"
         print(f"  - 设置后 publish: {std.publish}")

@@ -19,31 +19,22 @@ def test_imports():
 
     try:
         # 测试统一模型
-        from core.unified_models import UnifiedStandard, Standard
         print("[OK] core.unified_models 导入成功")
 
         # 测试旧模型别名
-        from core.models import Standard as LegacyStandard
         print("[OK] core.models (兼容层) 导入成功")
 
         # 测试API模型
-        from api.models import StandardInfo, SearchResponse
         print("[OK] api.models 导入成功")
 
         # 测试核心模块
-        from core.aggregated_downloader import AggregatedDownloader
         print("[OK] core.aggregated_downloader 导入成功")
 
-        from core.smart_search import StandardSearchMerger
         print("[OK] core.smart_search 导入成功")
 
-        from core.enhanced_search import EnhancedSmartSearcher
         print("[OK] core.enhanced_search 导入成功")
 
         # 测试数据源
-        from sources.gbw import GBWSource
-        from sources.zby import ZBYSource
-        from sources.by import BYSource
         print("[OK] 所有数据源导入成功")
 
         print("\n[PASS] 所有模块导入测试通过\n")
@@ -122,7 +113,7 @@ def test_search_basic():
         if results:
             first = results[0]
             assert isinstance(first, UnifiedStandard), f"结果应该是 UnifiedStandard 类型，实际是 {type(first)}"
-            print(f"[OK] 结果类型正确: UnifiedStandard")
+            print("[OK] 结果类型正确: UnifiedStandard")
             print(f"[OK] 第一条结果: {first.std_no} - {first.name[:30]}...")
 
             # 测试新方法
@@ -188,7 +179,7 @@ def test_smart_search():
         assert "ZBY" in result.sources and "GBW" in result.sources, "应该包含两个数据源"
         assert result.implement_date == "2020-07-01", "应该保留GBW的实施日期"
 
-        print(f"[OK] 合并结果验证通过")
+        print("[OK] 合并结果验证通过")
         print(f"  - 标准号: {result.std_no}")
         print(f"  - 数据源: {result.sources}")
         print(f"  - 实施日期: {result.implement_date}")

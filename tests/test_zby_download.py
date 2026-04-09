@@ -10,7 +10,6 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from sources.zby import ZBYSource
-from core.models import Standard
 
 
 def test_zby_download():
@@ -53,14 +52,14 @@ def test_zby_download():
 
     # 尝试下载第一个结果
     if results:
-        print(f"\n[2] 尝试下载第一个结果...")
+        print("\n[2] 尝试下载第一个结果...")
         item = results[0]
         output_dir = Path("test_downloads")
         output_dir.mkdir(exist_ok=True)
 
         print(f"   标准号: {item.std_no}")
         print(f"   has_pdf: {item.has_pdf}")
-        print(f"   开始下载...")
+        print("   开始下载...")
 
         result = zby.download(item, output_dir)
 
@@ -68,7 +67,7 @@ def test_zby_download():
             print(f"   [OK] 下载成功: {result.file_path}")
         else:
             print(f"   [X] 下载失败: {result.error}")
-            print(f"\n   日志:")
+            print("\n   日志:")
             for log in result.logs:
                 print(f"      {log}")
 

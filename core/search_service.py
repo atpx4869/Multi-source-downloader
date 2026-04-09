@@ -11,7 +11,7 @@ Search Service - 统一的搜索任务管理
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Iterator, Callable
+from typing import List, Optional, Dict, Iterator
 from datetime import datetime
 import uuid
 import logging

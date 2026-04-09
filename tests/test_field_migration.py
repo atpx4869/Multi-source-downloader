@@ -174,9 +174,9 @@ def test_all_sources():
         print("[OK] 所有数据源导入成功")
 
         # 测试创建实例
-        by_source = BYSource()
-        gbw_source = GBWSource()
-        zby_source = ZBYSource()
+        BYSource()
+        GBWSource()
+        ZBYSource()
 
         print("[OK] 所有数据源实例化成功")
         print()

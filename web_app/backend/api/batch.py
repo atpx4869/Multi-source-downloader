@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from fastapi import APIRouter, HTTPException, Body
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 import asyncio
 import re
 from web_app.backend.services.search import SearchService

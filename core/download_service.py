@@ -13,7 +13,7 @@ Download Service - 统一的下载任务管理
 from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Callable
+from typing import List, Optional, Dict
 from datetime import datetime
 import uuid
 import logging
@@ -284,7 +284,7 @@ class DownloadService(BaseService):
                 task_id=task.id,
                 event_type="failed",
                 status=TaskStatus.FAILED,
-                message=f"下载失败: 所有源都不可用",
+                message="下载失败: 所有源都不可用",
                 error=task.error,
                 progress=0
             ))

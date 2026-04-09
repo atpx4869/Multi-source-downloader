@@ -51,7 +51,7 @@ def build_exe_fast():
     print("\n" + "-"*70 + "\n")
     
     try:
-        result = subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True)
         
         print("\n" + "="*70)
         print("✅ 打包成功！")
@@ -59,11 +59,11 @@ def build_exe_fast():
         
         exe_path = os.path.join('dist', 'MultiSourceDownloader', 'MultiSourceDownloader.exe')
         if os.path.exists(exe_path):
-            print(f"\n📦 生成的程序：")
-            print(f"   位置: dist\\MultiSourceDownloader\\")
-            print(f"   启动: dist\\MultiSourceDownloader\\MultiSourceDownloader.exe")
-            print(f"\n💡 整个 dist\\MultiSourceDownloader 文件夹就是你的应用")
-            print(f"   可以压缩后分发给用户")
+            print("\n📦 生成的程序：")
+            print("   位置: dist\\MultiSourceDownloader\\")
+            print("   启动: dist\\MultiSourceDownloader\\MultiSourceDownloader.exe")
+            print("\n💡 整个 dist\\MultiSourceDownloader 文件夹就是你的应用")
+            print("   可以压缩后分发给用户")
         
         return True
         

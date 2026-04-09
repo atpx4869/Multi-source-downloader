@@ -197,7 +197,6 @@ def download_images_to_pdf(
         batch_size = 20
         current_page = 1
         max_pages = 1000
-        all_downloaded = True
         
         while current_page <= max_pages:
             end_page = current_page + batch_size

@@ -10,7 +10,6 @@
 5. 实用方法
 """
 import sys
-import io
 from pathlib import Path
 
 # 设置 UTF-8 编码
@@ -23,7 +22,7 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from core.unified_models import UnifiedStandard, Standard, convert_legacy_standards
+from core.unified_models import UnifiedStandard, Standard
 
 
 def test_basic_creation():
@@ -53,7 +52,7 @@ def test_basic_creation():
     print(f"✓ 文件名: {std.filename()}")
 
     assert std.std_no == "GB/T 3324-2024"
-    assert std.has_pdf == True
+    assert std.has_pdf
     assert len(std.sources) == 2
     print("\n✅ 基本创建测试通过")
 
@@ -122,7 +121,7 @@ def test_serialization():
 
     # 从字典恢复
     restored = UnifiedStandard.from_dict(data)
-    print(f"✓ 从字典恢复")
+    print("✓ 从字典恢复")
     print(f"  - std_no: {restored.std_no}")
     print(f"  - sources: {restored.sources}")
     print(f"  - has_pdf: {restored.has_pdf}")
@@ -158,7 +157,7 @@ def test_legacy_conversion():
 
     # 转换为新模型
     new_std = UnifiedStandard.from_legacy_standard(old_std)
-    print(f"✓ 转换为新模型")
+    print("✓ 转换为新模型")
     print(f"  - std_no: {new_std.std_no}")
     print(f"  - publish_date: {new_std.publish_date}")
     print(f"  - implement_date: {new_std.implement_date}")
@@ -169,7 +168,7 @@ def test_legacy_conversion():
 
     # 转换回旧模型
     back_to_old = new_std.to_legacy_standard()
-    print(f"✓ 转换回旧模型")
+    print("✓ 转换回旧模型")
     print(f"  - std_no: {back_to_old.std_no}")
     print(f"  - publish: {back_to_old.publish}")
 
@@ -212,8 +211,8 @@ def test_utility_methods():
     has_unknown = std.has_source("UNKNOWN")
     print(f"✓ 包含 BY: {has_by}")
     print(f"✓ 包含 UNKNOWN: {has_unknown}")
-    assert has_by == True
-    assert has_unknown == False
+    assert has_by
+    assert not has_unknown
 
     # 测试排序
     std1 = UnifiedStandard(std_no="GB/T 1000-2020", name="A")

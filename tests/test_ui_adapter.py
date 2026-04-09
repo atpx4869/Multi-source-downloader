@@ -18,7 +18,6 @@ sys.path.insert(0, str(project_root))
 from app.ui_service_adapter import UIDownloadAdapter, UISearchAdapter, SignalEmitter
 
 # 导入核心
-from core.models import Standard
 
 
 def test_signal_emitter():

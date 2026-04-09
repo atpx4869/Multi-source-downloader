@@ -18,7 +18,7 @@ try:
 except ImportError:
     HAS_FLASK = False
 
-from api import APIRouter, SourceType, DownloadStatus
+from api import APIRouter, SourceType
 
 
 def create_app():

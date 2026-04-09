@@ -89,7 +89,7 @@ def build_exe():
     print("\n" + "-"*70 + "\n")
     
     try:
-        result = subprocess.run(cmd, check=True, capture_output=False)
+        subprocess.run(cmd, check=True, capture_output=False)
         
         print("\n" + "="*70)
         print("✅ 打包成功！")
@@ -98,10 +98,10 @@ def build_exe():
         exe_path = os.path.join('dist', 'MultiSourceDownloader.exe')
         if os.path.exists(exe_path):
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)
-            print(f"\n📦 生成的 EXE 文件:")
+            print("\n📦 生成的 EXE 文件:")
             print(f"   路径: {exe_path}")
             print(f"   大小: {size_mb:.1f} MB")
-            print(f"\n🚀 可以运行测试: dist\\MultiSourceDownloader.exe")
+            print("\n🚀 可以运行测试: dist\\MultiSourceDownloader.exe")
         
         return True
         
@@ -151,7 +151,7 @@ def main():
     # 检查 PySide6
     try:
         import PySide6
-        print(f"✓ PySide6 已安装")
+        print("✓ PySide6 已安装")
     except ImportError:
         print("❌ 未安装 PySide6")
         print("   请运行: pip install PySide6")
