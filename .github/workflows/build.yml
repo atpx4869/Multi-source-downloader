@@ -78,6 +78,23 @@ jobs:
           --windows-icon-from-ico=app.ico `
           --include-data-file=core/logo.png=core/logo.png `
           --include-data-file=app/.auth_cache=app/.auth_cache `
+          --include-data-dir=config=config `
+          --include-package-data=playwright `
+          --include-package=playwright `
+          --include-package=sqlalchemy `
+          --include-package=httpx `
+          --include-package=requests `
+          --include-package=urllib3 `
+          --include-package=openpyxl `
+          --include-package=chardet `
+          --include-package=lxml `
+          --include-module=PySide6.QtNetwork `
+          --nofollow-import-to=matplotlib `
+          --nofollow-import-to=scipy `
+          --nofollow-import-to=tkinter `
+          --nofollow-import-to=jupyter `
+          --nofollow-import-to=IPython `
+          --nofollow-import-to=pytest `
           --assume-yes-for-downloads `
           --output-dir=dist `
           --company-name="MultiSourceDownloader" `
@@ -243,6 +260,23 @@ jobs:
           --windows-icon-from-ico=app.ico `
           --include-data-file=core/logo.png=core/logo.png `
           --include-data-file=app/.auth_cache=app/.auth_cache `
+          --include-data-dir=config=config `
+          --include-package-data=playwright `
+          --include-package=playwright `
+          --include-package=sqlalchemy `
+          --include-package=httpx `
+          --include-package=requests `
+          --include-package=urllib3 `
+          --include-package=openpyxl `
+          --include-package=chardet `
+          --include-package=lxml `
+          --include-module=PySide2.QtNetwork `
+          --nofollow-import-to=matplotlib `
+          --nofollow-import-to=scipy `
+          --nofollow-import-to=tkinter `
+          --nofollow-import-to=jupyter `
+          --nofollow-import-to=IPython `
+          --nofollow-import-to=pytest `
           --assume-yes-for-downloads `
           --output-dir=dist `
           --company-name="MultiSourceDownloader" `
