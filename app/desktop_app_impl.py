@@ -26,7 +26,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 import re
-from typing import List, Dict, Optional, Any
+from typing import List, Optional
 import queue
 import threading
 import time
@@ -43,18 +43,17 @@ if ppllocr_path.exists():
 # Some imports are dynamic in the codebase; this explicit import helps
 # PyInstaller include the package into the frozen bundle.
 try:
-    import sources  # type: ignore
     # also import common submodules so PyInstaller includes them
     try:
-        import sources.gbw  # type: ignore
+        pass  # type: ignore
     except Exception:
         pass
     try:
-        import sources.by  # type: ignore
+        pass  # type: ignore
     except Exception:
         pass
     try:
-        import sources.zby  # type: ignore
+        pass  # type: ignore
     except Exception:
         pass
 except Exception:
@@ -129,15 +128,83 @@ from app import ui_styles
 
 # 规范号规范化正则（复用以避免在循环中重复编译）
 _STD_NO_RE = re.compile(r"[\s/\-–—_:：]+")
-import threading
 
 # 缓存 AggregatedDownloader 实例以减少重复初始化开销
 _AD_CACHE: dict = {}
 _AD_CACHE_LOCK = threading.Lock()
 
+import sys
+import os
+import subprocess
+import threading
+import atexit
+import time
+import requests
+
+backend_process = None
+
+def start_backend_server():
+    global backend_process
+    try:
+        # Check if already running
+        try:
+            resp = requests.get("http://127.0.0.1:8000/api/", timeout=1)
+            if resp.status_code == 200:
+                print("Backend server is already running.")
+                return
+        except:
+            pass
+            
+        print("Starting backend server on port 8000...")
+        
+        # Determine python executable
+        python_exe = sys.executable
+        # Get absolute path to web_app/backend/main.py
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backend_script = os.path.join(project_root, "web_app", "backend", "main.py")
+        
+        if os.path.exists(backend_script):
+            # Run the uvicorn server via the main.py script
+            backend_process = subprocess.Popen(
+                [python_exe, backend_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            print(f"Backend server started with PID: {backend_process.pid}")
+            
+            # Wait for server to be ready
+            for _ in range(10):
+                try:
+                    resp = requests.get("http://127.0.0.1:8000/api/", timeout=1)
+                    if resp.status_code == 200:
+                        print("Backend server is ready.")
+                        break
+                except:
+                    time.sleep(1)
+        else:
+            print(f"Backend script not found at {backend_script}")
+    except Exception as e:
+        print(f"Failed to start backend server: {e}")
+
+def stop_backend_server():
+    global backend_process
+    if backend_process:
+        print("Stopping backend server...")
+        backend_process.terminate()
+        try:
+            backend_process.wait(timeout=3)
+        except:
+            backend_process.kill()
+        print("Backend server stopped.")
+
+atexit.register(stop_backend_server)
+
+# 在文件加载时尝试启动后端
+threading.Thread(target=start_backend_server, daemon=True).start()
+
 def get_aggregated_downloader(enable_sources=None, output_dir=None):
-    """返回一个复用的 AggregatedDownloader 实例（按 enable_sources+output_dir 缓存）。
-    如果 AggregatedDownloader 未导入或无法实例化，则返回 None 或抛出原始异常。
+    """返回一个复用的 HttpAggregatedDownloader 实例（按 enable_sources+output_dir 缓存）。
     """
     if output_dir is None:
         output_dir = "downloads"
@@ -147,19 +214,11 @@ def get_aggregated_downloader(enable_sources=None, output_dir=None):
         if inst is not None:
             return inst
 
-        # 延迟导入 core.AggregatedDownloader，若不可用则返回 None
         try:
-            from core import AggregatedDownloader
-        
-            try:
-                inst = AggregatedDownloader(enable_sources=enable_sources, output_dir=output_dir)
-            except Exception:
-                # 打印详细 traceback 以便诊断初始化失败原因
-                print("[get_aggregated_downloader] AggregatedDownloader init failed:")
-                traceback.print_exc()
-                return None
+            from core.http_aggregated_downloader import HttpAggregatedDownloader
+            inst = HttpAggregatedDownloader(enable_sources=enable_sources, output_dir=output_dir)
         except Exception:
-            print("[get_aggregated_downloader] import/core failure:")
+            print("[get_aggregated_downloader] HttpAggregatedDownloader init failed:")
             traceback.print_exc()
             return None
 
@@ -167,8 +226,7 @@ def get_aggregated_downloader(enable_sources=None, output_dir=None):
         return inst
 
 try:
-    from core import AggregatedDownloader
-    from core import natural_key
+    from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
     from core.models import Standard
     from core.smart_search import StandardSearchMerger
 except Exception:
@@ -511,9 +569,9 @@ class SearchThread(QtCore.QThread):
             
             # 日志反馈
             if metadata['is_gb_standard']:
-                self.log.emit(f"   📊 GB/T 标准检测：启用多源并行搜索")
+                self.log.emit("   📊 GB/T 标准检测：启用多源并行搜索")
             else:
-                self.log.emit(f"   📊 非 GB 标准：优先使用 ZBY")
+                self.log.emit("   📊 非 GB 标准：优先使用 ZBY")
             
             self.log.emit(f"   🔗 使用的数据源: {', '.join(metadata['sources_used'])}")
             
@@ -524,7 +582,7 @@ class SearchThread(QtCore.QThread):
             if metadata['total_results'] > 0:
                 self.log.emit(f"   ✅ 搜索完成: 共找到 {metadata['total_results']} 条结果，耗时 {elapsed:.2f}秒")
             else:
-                self.log.emit(f"   ℹ️  未找到匹配的标准")
+                self.log.emit("   ℹ️  未找到匹配的标准")
             
             self.progress.emit(100, 100, "搜索完成")
             self.all_completed.emit()
@@ -822,7 +880,6 @@ class DownloadWorker(threading.Thread):
         - 无标准：直接记录失败
         - 单标准超时：20秒强制中断（正常2-10秒，异常快速识别）
         """
-        import time
         import threading
         
         max_retries = 2
@@ -952,7 +1009,7 @@ class DownloadWorker(threading.Thread):
                                     GBWSource._pdf_check_cache[item_id] = False
                                     self._emit_log(f"      ✓ 缓存已更新: {item_id[:16]}...")
                                 else:
-                                    self._emit_log(f"      ⚠️  无法获取item_id，跳过缓存更新")
+                                    self._emit_log("      ⚠️  无法获取item_id，跳过缓存更新")
                             except Exception as e:
                                 self._emit_log(f"      ⚠️  缓存更新失败: {str(e)[:50]}")
                         
@@ -1075,7 +1132,6 @@ class BatchDownloadThread(QtCore.QThread):
         - 智能重试：区分错误类型，网络错误重试，源不可用跳过
         - 性能提升：15-20% 加速，关键路径优化
         """
-        import time
         start_time = time.time()
         
         # 1. 初始化资源和队列
@@ -1165,7 +1221,6 @@ class BatchDownloadThread(QtCore.QThread):
                                  search_workers, failed_list):
         """执行搜索流水线：并行搜索和收集结果"""
         import threading
-        import time
         
         self.log.emit("🚀 [方案1+3] 启动流水线：边搜边下，智能重试")
         self.log.emit(f"   🔍 搜索线程数: {len(search_workers)}   ⬇️  下载线程数: {self.num_workers}")
@@ -1192,7 +1247,7 @@ class BatchDownloadThread(QtCore.QThread):
                 try:
                     search_queue.put((std_id, idx), timeout=5)
                 except queue.Full:
-                    self.log.emit(f"⚠️ 搜索队列已满，等待...")
+                    self.log.emit("⚠️ 搜索队列已满，等待...")
                     search_queue.put((std_id, idx))
             
             for _ in range(num_search_workers):
@@ -1205,8 +1260,6 @@ class BatchDownloadThread(QtCore.QThread):
             remaining = len([s for s in self.std_ids if s.strip()])
             collected = 0
             start_time = time.time()
-            last_progress_time = start_time
-            current_std_id = ""  # 记录当前处理的标准号
             
             timeout_count = 0  # 连续超时计数器
             dynamic_timeout = 30  # 默认超时时间
@@ -1219,14 +1272,12 @@ class BatchDownloadThread(QtCore.QThread):
                     std_id, idx, results = result_queue.get(timeout=dynamic_timeout)
                     timeout_count = 0  # 重置超时计数
                     collected += 1
-                    processed = collected
-                    current_std_id = std_id  # 更新当前处理的标准号
                     
                     # 更新进度：搜索进度从 0-50%，显示当前标准号
                     progress = int(collected / remaining * 50)
                     elapsed = int(time.time() - start_time)
                     est_total = int(elapsed * remaining / max(1, collected))
-                    eta = est_total - elapsed
+                    est_total - elapsed
                     
                     # 改进的进度信息：包含标准号、已耗时、预计总耗时
                     progress_msg = f"[搜索中] {collected}/{remaining} | 当前: {std_id[:25]} | 耗时: {elapsed}s | 预计: {est_total}s"
@@ -1257,7 +1308,7 @@ class BatchDownloadThread(QtCore.QThread):
                     try:
                         download_queue.put((std_id, best_match), timeout=5)
                     except queue.Full:
-                        self.log.emit(f"   ⚠️ 下载队列已满，等待...")
+                        self.log.emit("   ⚠️ 下载队列已满，等待...")
                         download_queue.put((std_id, best_match))
                     
                     result_queue.task_done()
@@ -1273,7 +1324,7 @@ class BatchDownloadThread(QtCore.QThread):
                     # 第2次超时：增加日志详度
                     elif timeout_count == 2:
                         self.log.emit(f"⚠️ 搜索响应非常缓慢 ({dynamic_timeout}s超时)，已收集 {collected}/{remaining} | 耗时 {elapsed}s")
-                        self.log.emit(f"   可能原因：网络延迟、API限速、或大量搜索结果需要处理")
+                        self.log.emit("   可能原因：网络延迟、API限速、或大量搜索结果需要处理")
                     # 第3次超时：检查是否应该放弃
                     elif timeout_count >= 3:
                         # 检查搜索workers是否还活跃
@@ -1306,9 +1357,8 @@ class BatchDownloadThread(QtCore.QThread):
     
     def _execute_download_pipeline(self, download_queue, download_workers, search_count):
         """执行下载流水线：监控下载进度直到完成"""
-        import time
         
-        self.log.emit(f"──────────────────────────────────────")
+        self.log.emit("──────────────────────────────────────")
         self.log.emit(f"🔍 搜索阶段完成！共找到 {search_count} 个标准")
         self.log.emit(f"⏳ 正在下载 {search_count} 个文件（{self.num_workers} 线程并发）...")
         
@@ -1361,7 +1411,7 @@ class BatchDownloadThread(QtCore.QThread):
                 
                 # 检测卡住情况并诊断
                 if download_no_progress_count == 30:
-                    self.log.emit(f"⚠️ 检测到下载进度停顿 (30秒无新完成)")
+                    self.log.emit("⚠️ 检测到下载进度停顿 (30秒无新完成)")
                     self.log.emit(f"   当前进度: {current_downloaded}/{download_total}")
                     self.log.emit(f"   活跃Worker: {sum(1 for w in download_workers if w.is_alive())}/{len(download_workers)}")
                     for w in download_workers:
@@ -1369,12 +1419,12 @@ class BatchDownloadThread(QtCore.QThread):
                             self.log.emit(f"   Worker-{w.worker_id} 正在处理: {w.current_std_no}")
                 
                 if download_no_progress_count == 60:
-                    self.log.emit(f"❌ 下载可能已卡住 (60秒无新完成)")
+                    self.log.emit("❌ 下载可能已卡住 (60秒无新完成)")
                     if stuck_workers:
-                        self.log.emit(f"   卡住的Worker任务:")
+                        self.log.emit("   卡住的Worker任务:")
                         for task in stuck_workers:
                             self.log.emit(f"     • {task}")
-                    self.log.emit(f"   建议：检查网络连接或对应下载源是否可用")
+                    self.log.emit("   建议：检查网络连接或对应下载源是否可用")
             
             time.sleep(0.5)
         
@@ -1395,21 +1445,21 @@ class BatchDownloadThread(QtCore.QThread):
         """生成并输出批量下载的最终统计结果"""
         self.progress.emit(100, 100, f"[完成] 耗时: {total_elapsed:.1f}秒")
         
-        self.log.emit(f"──────────────────────────────────────")
-        self.log.emit(f"📊 📊 📊 批量下载完成统计 📊 📊 📊")
-        self.log.emit(f"──────────────────────────────────────")
+        self.log.emit("──────────────────────────────────────")
+        self.log.emit("📊 📊 📊 批量下载完成统计 📊 📊 📊")
+        self.log.emit("──────────────────────────────────────")
         self.log.emit(f"🔍 搜索阶段: {search_count}/{total} 成功，{search_fail} 失败")
         self.log.emit(f"⬇️  下载阶段: {total_success} 成功，{total_fail} 失败")
         self.log.emit(f"📈 总成功率: {total_success/(max(1, total_success+total_fail))*100:.1f}%")
         self.log.emit(f"⏱️  总耗时: {total_elapsed:.1f}秒")
-        self.log.emit(f"👷 Worker详情:")
+        self.log.emit("👷 Worker详情:")
         for worker_id, success, fail in worker_stats:
             rate = success / max(1, success + fail) * 100
             self.log.emit(f"   Worker-{worker_id}: ✅ {success} | ❌ {fail} ({rate:.0f}%)")
         
         # P1: 显示结构化的失败信息
         if failed_list:
-            self.log.emit(f"📋 失败的标准 (前10个):")
+            self.log.emit("📋 失败的标准 (前10个):")
             for item in failed_list[:10]:
                 # 兼容旧的字符串格式和新的 FailedItem 对象
                 if isinstance(item, FailedItem):
@@ -1425,7 +1475,7 @@ class BatchDownloadThread(QtCore.QThread):
                 for item in self.failed_items:
                     error_counts[item.error_type] = error_counts.get(item.error_type, 0) + 1
                 
-                self.log.emit(f"📊 失败原因统计:")
+                self.log.emit("📊 失败原因统计:")
                 for error_type, count in sorted(error_counts.items(), key=lambda x: x[1], reverse=True):
                     type_name = {
                         "network": "网络错误",
@@ -1436,7 +1486,7 @@ class BatchDownloadThread(QtCore.QThread):
                     }.get(error_type, error_type)
                     self.log.emit(f"   • {type_name}: {count} 个")
         
-        self.log.emit(f"──────────────────────────────────────")
+        self.log.emit("──────────────────────────────────────")
 
 
 
@@ -1483,7 +1533,7 @@ class DownloadThread(QtCore.QThread):
             try:
                 path, logs = client.download(obj, prefer_order=self.prefer_order)
             except Exception as e:
-                tb = traceback.format_exc()
+                traceback.format_exc()
                 return False, std_no, f"{str(e)[:100]}"
 
             if path:
@@ -2062,7 +2112,7 @@ class SettingsDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
         if reply == QtWidgets.QMessageBox.Yes:
-            from core.api_config import APIConfig, APIMode
+            from core.api_config import APIConfig
             default = APIConfig()
             
             self.rb_local.setChecked(default.is_local_mode())
@@ -2264,7 +2314,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.web_server_event = threading.Event()  # 用于线程间信号
 
         # 创建菜单栏
-        menubar = self.menuBar()
+        self.menuBar()
 
         central = QtWidgets.QWidget()
         central.setStyleSheet("background-color: #f8f9fa;")
@@ -3520,7 +3570,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         try:
             from core.models import Standard
-            from core.aggregated_downloader import AggregatedDownloader
+            from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
             from pathlib import Path
             
             # 从任务元数据重建 Standard 对象
@@ -3842,7 +3892,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.append_log(f"   [DEBUG] 智能过滤开始: keyword='{self.last_keyword if self.last_keyword else 'None'}', items={len(self.all_items) if self.all_items else 0}")
         
         if not self.last_keyword or not self.all_items:
-            self.append_log(f"   ⚠️  智能过滤跳过")
+            self.append_log("   ⚠️  智能过滤跳过")
             return
         
         # 检测是否带年代号（例如 GB/T 1234-2024 或 QB/T 2280-2016）
@@ -3853,11 +3903,11 @@ class MainWindow(QtWidgets.QMainWindow):
         
         if keyword_has_year:
             # 带年代号，不需要过滤
-            self.append_log(f"   ℹ️  关键词带年代号，跳过智能过滤")
+            self.append_log("   ℹ️  关键词带年代号，跳过智能过滤")
             return
         
         # 不带年代号，执行智能过滤
-        self.append_log(f"   🔍 检测到不带年代号的搜索，自动筛选现行标准...")
+        self.append_log("   🔍 检测到不带年代号的搜索，自动筛选现行标准...")
         
         # 提取基础标准号（去除年代号）
         def get_base_std_no(std_no: str) -> str:
@@ -4045,7 +4095,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     continue
                 is_available = getattr(health, 'available', False)
                 checkbox.setChecked(bool(is_available))
-        except Exception as e:
+        except Exception:
             tb = traceback.format_exc()
             self.append_log(tb)
 
@@ -4390,7 +4440,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 }
                 
                 # 添加到队列
-                task_id = queue_manager.add_task(
+                queue_manager.add_task(
                     std_no=std.std_no,
                     std_name=std.name,
                     priority=5,  # 默认优先级
@@ -4566,12 +4616,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log("⏳ 正在请求停止批量下载任务...")
 
     def on_batch_download_finished(self, success: int, fail: int, failed_list: list):
-        self.append_log(f"📊 批量下载任务结束")
+        self.append_log("📊 批量下载任务结束")
         self.append_log(f"   ✅ 成功: {success}")
         self.append_log(f"   ❌ 失败: {fail}")
         
         if failed_list:
-            self.append_log(f"📋 失败清单:")
+            self.append_log("📋 失败清单:")
             for item in failed_list:
                 self.append_log(f"   - {item}")
         

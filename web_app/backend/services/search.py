@@ -12,7 +12,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from web_app.backend.adapters.base import BaseAdapter
-from web_app.backend.models.responses import SearchResponse, StandardModel
+from web_app.backend.models.responses import SearchResponse
 from web_app.backend.config import settings
 
 
@@ -81,6 +81,7 @@ class SearchService:
             )
             
         except asyncio.TimeoutError:
+            # 超时返回部分结果（如果可能）或者空列表
             return SearchResponse(
                 source=source,
                 query=query,
@@ -95,7 +96,7 @@ class SearchService:
                 query=query,
                 count=0,
                 items=[],
-                error=str(e),
+                error=f"搜索异常: {str(e)}",
                 elapsed_time=time.time() - start_time
             )
     

@@ -4,7 +4,6 @@
 
 提供标准化的错误类型和日志格式，便于调试和监控。
 """
-import logging
 from typing import Optional
 from enum import Enum
 

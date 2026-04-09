@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Layout, message } from 'antd';
+import { Layout, App as AntdApp } from 'antd';
 import SearchBar from './components/SearchBar';
 import SourceTabs from './components/SourceTabs';
 import BatchActions from './components/BatchActions';
@@ -28,6 +28,7 @@ const extractStandardType = (std_no) => {
 };
 
 function App() {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [activeSource, setActiveSource] = useState('all');
   const [searchResults, setSearchResults] = useState({});
@@ -162,7 +163,8 @@ function App() {
       const resultsWithCache = await Promise.all(
         targetItems.map(async (item) => {
           try {
-            const url = `http://localhost:8000/api/download/check-cache/${encodeURIComponent(item.std_no)}`;
+            const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+            const url = `${apiBase}/download/check-cache/${encodeURIComponent(item.std_no)}`;
             const response = await fetch(url);
             const cacheData = await response.json();
             return { ...item, cached: cacheData.cached };
@@ -209,7 +211,8 @@ function App() {
     const resultsWithCache = await Promise.all(
       targetItems.map(async (item) => {
         try {
-          const url = `http://localhost:8000/api/download/check-cache/${encodeURIComponent(item.std_no)}`;
+          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+          const url = `${apiBase}/download/check-cache/${encodeURIComponent(item.std_no)}`;
           const response = await fetch(url);
           const cacheData = await response.json();
           return { ...item, cached: cacheData.cached };
@@ -255,8 +258,11 @@ function App() {
   const triggerBrowserDownload = async (filename) => {
     try {
       // 从静态文件目录下载
-      const apiBase = 'http://localhost:8000';
-      const url = `${apiBase}/downloads/${encodeURIComponent(filename)}`;
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+      // 由于静态文件在 /downloads 下，我们需要提取出主机部分
+      // 如果 apiBaseUrl 是相对路径 '/api'，那么 apiHost 就是空字符串，url 就是 '/downloads/xxx'
+      const apiHost = apiBaseUrl.startsWith('http') ? new URL(apiBaseUrl).origin : '';
+      const url = `${apiHost}/downloads/${encodeURIComponent(filename)}`;
 
       // 使用 fetch + blob 方式强制下载，避免浏览器直接打开 PDF
       const response = await fetch(url);
@@ -284,6 +290,100 @@ function App() {
       }
     } catch (e) {
       console.error('触发浏览器下载失败:', e);
+    }
+  };
+
+  // 通用批量下载处理逻辑
+  const processBatchQueue = async (queueToProcess) => {
+    const failedItems = [];
+    let successCount = 0;
+
+    for (let i = 0; i < queueToProcess.length; i++) {
+      const item = queueToProcess[i];
+
+      if (item.has_pdf === false) {
+        addLog(`跳过无文本标准: ${item.std_no}`, 'warning');
+        setDownloadQueue(prev => {
+          const newQueue = [...prev];
+          newQueue[i] = { ...newQueue[i], status: 'error', error: '无文本可下载' };
+          return newQueue;
+        });
+        failedItems.push({ std_no: item.std_no, reason: '无文本可下载' });
+        continue;
+      }
+
+      setDownloadQueue(prev => {
+        const newQueue = [...prev];
+        newQueue[i] = { ...newQueue[i], status: 'downloading', progress: 0 };
+        return newQueue;
+      });
+
+      try {
+        // 使用优先下载接口，按 GBW > BY > ZBY 顺序尝试
+        const result = await downloadAPI.downloadFirstAvailable(item.std_no);
+
+        if (result.status === 'success') {
+          addLog(`批量下载成功: ${item.std_no}`, 'success');
+          setDownloadQueue(prev => {
+            const newQueue = [...prev];
+            newQueue[i] = { ...newQueue[i], status: 'success', progress: 100 };
+            return newQueue;
+          });
+          successCount++;
+          // 触发浏览器下载
+          triggerBrowserDownload(result.filename);
+        } else {
+          const errorMsg = result.error || '下载失败';
+          addLog(`批量下载失败: ${item.std_no} - ${errorMsg}`, 'error');
+          setDownloadQueue(prev => {
+            const newQueue = [...prev];
+            newQueue[i] = {
+              ...newQueue[i],
+              status: 'error',
+              error: errorMsg
+            };
+            return newQueue;
+          });
+          failedItems.push({ std_no: item.std_no, reason: errorMsg });
+        }
+      } catch (error) {
+        const errorMsg = error.message || '未知错误';
+        addLog(`批量下载错误: ${item.std_no} - ${errorMsg}`, 'error');
+        setDownloadQueue(prev => {
+          const newQueue = [...prev];
+          newQueue[i] = {
+            ...newQueue[i],
+            status: 'error',
+            error: errorMsg
+          };
+          return newQueue;
+        });
+        failedItems.push({ std_no: item.std_no, reason: errorMsg });
+      }
+    }
+
+    // 显示汇总报告
+    if (failedItems.length > 0) {
+      import('antd').then(({ Modal }) => {
+        Modal.warning({
+          title: '批量下载完成 (存在失败项)',
+          width: 500,
+          content: (
+            <div>
+              <p>共 {queueToProcess.length} 项，成功 <span style={{ color: 'green', fontWeight: 'bold' }}>{successCount}</span> 项，失败 <span style={{ color: 'red', fontWeight: 'bold' }}>{failedItems.length}</span> 项。</p>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', background: '#f5f5f5', padding: '8px', borderRadius: '4px' }}>
+                {failedItems.map((item, index) => (
+                  <div key={index} style={{ marginBottom: '4px', borderBottom: '1px solid #e8e8e8', paddingBottom: '2px' }}>
+                    <span style={{ fontWeight: 'bold' }}>{item.std_no}</span>: <span style={{ color: 'red' }}>{item.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ),
+        });
+      });
+    } else {
+      message.success(`批量下载完成：全部 ${successCount} 项下载成功！`);
     }
   };
 
@@ -330,102 +430,8 @@ function App() {
     setDownloadQueue(queue);
     setShowBatchModal(true);
 
-    // 3. 执行下载循环
-    const processQueue = async (queueToProcess) => {
-      const failedItems = [];
-      let successCount = 0;
-
-      for (let i = 0; i < queueToProcess.length; i++) {
-        const item = queueToProcess[i];
-
-        if (item.has_pdf === false) {
-          addLog(`跳过无文本标准: ${item.std_no}`, 'warning');
-          setDownloadQueue(prev => {
-            const newQueue = [...prev];
-            newQueue[i] = { ...newQueue[i], status: 'error', error: '无文本可下载' };
-            return newQueue;
-          });
-          failedItems.push({ std_no: item.std_no, reason: '无文本可下载' });
-          continue;
-        }
-
-        setDownloadQueue(prev => {
-          const newQueue = [...prev];
-          newQueue[i] = { ...newQueue[i], status: 'downloading', progress: 0 };
-          return newQueue;
-        });
-
-        try {
-          // 使用优先下载接口，按 GBW > BY > ZBY 顺序尝试
-          const result = await downloadAPI.downloadFirstAvailable(item.std_no);
-
-          if (result.status === 'success') {
-            addLog(`批量下载成功: ${item.std_no}`, 'success');
-            setDownloadQueue(prev => {
-              const newQueue = [...prev];
-              newQueue[i] = { ...newQueue[i], status: 'success', progress: 100 };
-              return newQueue;
-            });
-            successCount++;
-            // 触发浏览器下载
-            triggerBrowserDownload(result.filename);
-          } else {
-            const errorMsg = result.error || '下载失败';
-            addLog(`批量下载失败: ${item.std_no} - ${errorMsg}`, 'error');
-            setDownloadQueue(prev => {
-              const newQueue = [...prev];
-              newQueue[i] = {
-                ...newQueue[i],
-                status: 'error',
-                error: errorMsg
-              };
-              return newQueue;
-            });
-            failedItems.push({ std_no: item.std_no, reason: errorMsg });
-          }
-        } catch (error) {
-          const errorMsg = error.message || '未知错误';
-          addLog(`批量下载错误: ${item.std_no} - ${errorMsg}`, 'error');
-          setDownloadQueue(prev => {
-            const newQueue = [...prev];
-            newQueue[i] = {
-              ...newQueue[i],
-              status: 'error',
-              error: errorMsg
-            };
-            return newQueue;
-          });
-          failedItems.push({ std_no: item.std_no, reason: errorMsg });
-        }
-      }
-
-      // 4. 显示汇总报告
-      if (failedItems.length > 0) {
-        import('antd').then(({ Modal }) => {
-          Modal.warning({
-            title: '批量下载完成 (存在失败项)',
-            width: 500,
-            content: (
-              <div>
-                <p>共 {queueToProcess.length} 项，成功 <span style={{ color: 'green', fontWeight: 'bold' }}>{successCount}</span> 项，失败 <span style={{ color: 'red', fontWeight: 'bold' }}>{failedItems.length}</span> 项。</p>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', background: '#f5f5f5', padding: '8px', borderRadius: '4px' }}>
-                  {failedItems.map((item, index) => (
-                    <div key={index} style={{ marginBottom: '4px', borderBottom: '1px solid #e8e8e8', paddingBottom: '2px' }}>
-                      <span style={{ fontWeight: 'bold' }}>{item.std_no}</span>: <span style={{ color: 'red' }}>{item.reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ),
-          });
-        });
-      } else {
-        message.success(`批量下载完成：全部 ${successCount} 项下载成功！`);
-      }
-    };
-
     // 启动处理
-    processQueue(queue);
+    processBatchQueue(queue);
   };
 
   // 处理导入确认
@@ -445,50 +451,32 @@ function App() {
     setDownloadQueue(queue);
     setShowBatchModal(true);
 
-    // 复用 handleBatchDownload 的内部逻辑需要提取出来
-    // 这里为了避免重构太多，先临时复制逻辑，TODO: 提取公共函数
-    // 实际上我们在上面 handleBatchDownload 已经重构了 processQueue 闭包，
-    // 要跨函数复用，最好把 processQueue 提出来。
-    // 但鉴于React组件内函数定义，我们可以把 logic 提取为组件内的一个通用函数 handleProcessQueue
+    processBatchQueue(queue);
+  };
 
-    // 临时方案：再次复制 logic (为了快速响应用户)
-    // 更好的方案：既然我都在改 handleBatchDownload，不如直接把 processQueue 定义在组件作用域
-    // 但是 replace_file_content 只能替换片段。
-
-    // 让我们先完成 handleBatchDownload 的替换，然后再用另一个工具调用来替换 handleImportConfirm
-    // 或者我们直接在这里把 handleBatchDownload 改造成通用接受 queue 参数的函数？
-
-    // 不，handleBatchDownload 依赖 selectedItems。 
-    // 让我们先把 processQueue 逻辑提取出来，但我不能在一个 tool call 里轻松做到跨位置移动。
-    // 所以我将分两步走：
-    // 1. 定义一个通用的 processBatchDownload(queue) 函数在组件内（或者在 handleBatchDownload 旁边）
-    // 2. 让 handleBatchDownload 和 handleImportConfirm 都调用它。
-
-    // 让我们先修改 handleBatchDownload，把它重构为调用一个新函数 processBatchQueue
-    // 然后再修改 handleImportConfirm 调用这个 processBatchQueue
-
-    // 等等，用户现在要的是“无论是主程序 还是 批量导入下载程序”。
-    // 所以我必须确保两者都覆盖。
-
-    return (
+  return (
       <Layout style={{ height: '100vh', width: '100%', overflow: 'hidden' }}>
         {/* 顶部标题栏 - 固定高度 */}
         <Header style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: '16px 24px',
+          background: '#5a67d8',
+          padding: '0 24px',
           height: '64px',
           display: 'flex',
-          justifyContent: 'center',
           alignItems: 'center',
-          flexShrink: 0
+          flexShrink: 0,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          zIndex: 10
         }}>
           <h1 style={{
             color: 'white',
             margin: 0,
-            fontSize: '24px',
-            fontWeight: 600
+            fontSize: '20px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            📚 标准文献检索系统
+            <span role="img" aria-label="books">📚</span> 标准文献检索系统
           </h1>
         </Header>
 
@@ -497,16 +485,17 @@ function App() {
           <Content style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
             {/* 搜索栏 - 固定高度 */}
             <div style={{
-              background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+              background: 'white',
               padding: '16px 24px',
-              flexShrink: 0
+              flexShrink: 0,
+              borderBottom: '1px solid #f0f0f0'
             }}>
               <SearchBar onSearch={handleSearch} loading={loading} />
             </div>
 
             {/* 主内容区 - 内部三栏布局 */}
-            <div style={{ flex: 1, overflow: 'hidden', background: '#f0f2f5' }}>
-              <div className="main-content-row" style={{ height: '100%', display: 'flex' }}>
+            <div style={{ flex: 1, overflow: 'hidden', background: '#f0f2f5', padding: '16px' }}>
+              <div className="main-content-row" style={{ height: '100%', display: 'flex', gap: '16px' }}>
                 {/* 左侧栏 */}
                 <div className="sidebar-left">
                   <HistoryPanel
@@ -523,7 +512,7 @@ function App() {
                 {/* 中间栏：主要滚动区 */}
                 <div className="content-center">
                   {Object.keys(searchResults).length > 0 && (
-                    <div style={{ padding: '16px 8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                       <SourceTabs
                         activeSource={activeSource}
                         onChange={handleSourceChange}
@@ -531,22 +520,26 @@ function App() {
                       />
 
                       {sourceBaseResults.length > 0 && (
-                        <BatchActions
-                          selectedCount={selectedItems.length}
-                          onBatchDownload={handleBatchDownload}
-                          onSelectAll={handleSelectAll}
-                          selectAll={selectAll}
-                        />
+                        <div style={{ marginBottom: 16 }}>
+                          <BatchActions
+                            selectedCount={selectedItems.length}
+                            onBatchDownload={handleBatchDownload}
+                            onSelectAll={handleSelectAll}
+                            selectAll={selectAll}
+                          />
+                        </div>
                       )}
 
                       {displayResults.length > 0 ? (
-                        <ResultTable
-                          results={displayResults}
-                          loading={loading}
-                          selectedItems={selectedItems}
-                          onSelectionChange={handleSelectionChange}
-                          onDownload={handleDownload}
-                        />
+                        <div style={{ flex: 1, overflow: 'auto', background: 'white', borderRadius: 8, padding: 16 }}>
+                          <ResultTable
+                            results={displayResults}
+                            loading={loading}
+                            selectedItems={selectedItems}
+                            onSelectionChange={handleSelectionChange}
+                            onDownload={handleDownload}
+                          />
+                        </div>
                       ) : (
                         !loading && (
                           <div style={{
@@ -555,7 +548,7 @@ function App() {
                             background: 'white',
                             borderRadius: 8,
                             color: '#999',
-                            marginTop: 16
+                            flex: 1
                           }}>
                             <p style={{ fontSize: 16 }}>
                               {sourceBaseResults.length > 0
@@ -572,10 +565,13 @@ function App() {
                     <div style={{
                       textAlign: 'center',
                       padding: '100px 0',
-                      margin: '16px 8px',
                       background: 'white',
                       borderRadius: 8,
-                      color: '#999'
+                      color: '#999',
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}>
                       <p style={{ fontSize: 18 }}>请输入关键词开始搜索</p>
                     </div>
@@ -599,9 +595,13 @@ function App() {
             </div>
           </Content>
         ) : activeTab === 'check' ? (
-          <StandardCheckPage onBack={() => setActiveTab('search')} />
+          <Content style={{ overflow: 'auto', background: '#f0f2f5' }}>
+             <StandardCheckPage onBack={() => setActiveTab('search')} />
+          </Content>
         ) : (
-          <ExcelCompletionPage onBack={() => setActiveTab('search')} />
+          <Content style={{ overflow: 'auto', background: '#f0f2f5' }}>
+             <ExcelCompletionPage onBack={() => setActiveTab('search')} />
+          </Content>
         )}
 
         {/* 弹窗组件移到 Layout 最外层 */}

@@ -16,7 +16,8 @@ const SearchBar = ({ onSearch, loading }) => {
             <Space.Compact style={{ width: '100%' }}>
                 <Input
                     size="large"
-                    placeholder="🔍 输入标准号或关键词..."
+                    placeholder="输入标准号或关键词..."
+                    prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onPressEnter={handleSearch}
@@ -25,12 +26,9 @@ const SearchBar = ({ onSearch, loading }) => {
                 <Button
                     type="primary"
                     size="large"
-                    icon={<SearchOutlined />}
                     loading={loading}
                     onClick={handleSearch}
                     style={{
-                        background: '#5a67d8',
-                        borderColor: '#5a67d8',
                         minWidth: 100
                     }}
                 >

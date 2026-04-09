@@ -2,10 +2,12 @@
 """
 FastAPI主应用
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pathlib import Path
 import sys
+import traceback
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent
@@ -27,6 +29,21 @@ app = FastAPI(
     docs_url=settings.DOCS_URL,
     redoc_url="/api/redoc"
 )
+
+# 全局异常处理器
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_msg = str(exc)
+    trace = traceback.format_exc()
+    logger.error(f"Global Error: {error_msg}\n{trace}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "error": "Internal Server Error",
+            "detail": error_msg
+        }
+    )
 
 # CORS中间件
 app.add_middleware(

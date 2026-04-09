@@ -13,7 +13,8 @@ import {
     Divider,
     Row,
     Col,
-    Alert
+    Alert,
+    Flex
 } from 'antd';
 import {
     UploadOutlined,
@@ -31,7 +32,7 @@ const { Title, Text } = Typography;
 const { Dragger } = Upload;
 
 // API 基础 URL
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const StandardCheckPage = ({ onBack }) => {
     const [file, setFile] = useState(null);
@@ -201,7 +202,7 @@ const StandardCheckPage = ({ onBack }) => {
     ];
 
     return (
-        <div style={{ padding: '16px', background: '#f0f2f5', minHeight: '100vh' }}>
+        <div style={{ padding: '24px', background: 'var(--ant-color-bg-layout)', minHeight: '100vh', boxSizing: 'border-box' }}>
             <Card
                 title={
                     <Space>
@@ -215,7 +216,7 @@ const StandardCheckPage = ({ onBack }) => {
                                 返回搜索
                             </Button>
                         )}
-                        <FileExcelOutlined style={{ fontSize: 20, color: '#52c41a' }} />
+                        <FileExcelOutlined style={{ fontSize: 20, color: 'var(--ant-color-primary)' }} />
                         <span>标准查新 - 批量查询元数据</span>
                     </Space>
                 }
@@ -226,7 +227,7 @@ const StandardCheckPage = ({ onBack }) => {
                     <Col span={16}>
                         <Dragger {...uploadProps} style={{ marginBottom: 16 }}>
                             <p className="ant-upload-drag-icon">
-                                <CloudUploadOutlined style={{ color: '#1890ff', fontSize: 48 }} />
+                                <CloudUploadOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 48 }} />
                             </p>
                             <p className="ant-upload-text">点击或拖拽文件到这里</p>
                             <p className="ant-upload-hint">
@@ -242,7 +243,7 @@ const StandardCheckPage = ({ onBack }) => {
                                 onChange={setSources}
                             />
                         </Card>
-                        <Space direction="vertical" style={{ width: '100%' }}>
+                        <Flex vertical gap="small" style={{ width: '100%' }}>
                             <Button
                                 type="primary"
                                 icon={<UploadOutlined />}
@@ -252,7 +253,7 @@ const StandardCheckPage = ({ onBack }) => {
                                 block
                                 size="large"
                             >
-                                开始查询
+                                开始查新
                             </Button>
                             <Button
                                 icon={<ReloadOutlined />}
@@ -261,7 +262,7 @@ const StandardCheckPage = ({ onBack }) => {
                             >
                                 重置
                             </Button>
-                        </Space>
+                        </Flex>
                     </Col>
                 </Row>
 
@@ -320,7 +321,7 @@ const StandardCheckPage = ({ onBack }) => {
                         title="处理日志"
                         size="small"
                         style={{ maxHeight: 200, overflow: 'auto' }}
-                        bodyStyle={{ padding: '8px 12px' }}
+                        styles={{ body: { padding: '8px 12px' } }}
                     >
                         {taskStatus.logs?.map((log, index) => (
                             <div key={index} style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 0' }}>

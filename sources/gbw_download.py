@@ -82,7 +82,7 @@ def prewarm_ocr():
             except Exception:
                 # 预热失败也没关系，标记为已预热
                 pass
-    except (Exception, SystemError, ImportError) as e:
+    except (Exception, SystemError, ImportError):
         # OCR初始化失败，设为None以后续安全跳过
         _ppll_ocr_instance = None
     finally:
@@ -322,7 +322,7 @@ def format_row(idx: int, item: dict) -> str:
 
 
 def get_hcno(std_id: str) -> str:
-    t_start = time.time()
+    time.time()
     detail_url = f"{DETAIL_URL}?id={std_id}"
     # 显式禁用代理
     try:
@@ -533,7 +533,7 @@ def download_with_ocr(
         baidu_early_used = 0
         for attempt in range(1, total_limit + 1):
             stats["attempts"] += 1
-            t_start = time.time()
+            time.time()
             try:
                 ts = int(time.time() * 1000)
                 url = f"{CAPTCHA_URL}?_{ts}"
@@ -617,7 +617,7 @@ def download_with_ocr(
                 norm = resp_text.lower()
                 if norm in ("true", "success", "ok", "1") or "成功" in resp_text:
                     stats["verify_success"] += 1
-                    log(f"GBW: 验证码识别成功")
+                    log("GBW: 验证码识别成功")
                     try:
                         download_file(session, hcno, show_url, outfile, gbw_type=gbw_type)
                         log(f"下载完成 ({gbw_type}): {outfile.name}")

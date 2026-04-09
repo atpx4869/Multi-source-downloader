@@ -12,7 +12,7 @@ import pandas as pd
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.aggregated_downloader import AggregatedDownloader
+from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
 
 try:
     from PySide6 import QtCore, QtWidgets, QtGui

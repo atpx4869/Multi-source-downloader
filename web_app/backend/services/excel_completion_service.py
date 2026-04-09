@@ -2,7 +2,6 @@
 Excel 标准号补全服务
 功能：将不完整的标准号补全为完整格式（添加年份）并获取标准名称
 """
-import os
 import time
 import uuid
 import threading
@@ -219,7 +218,7 @@ class ExcelCompletionService:
                     task.add_log(f"已处理 {idx + 1}/{task.total} 个标准号")
             
             # 5. 保存结果
-            result_df = pd.DataFrame(results)
+            pd.DataFrame(results)
             result_filename = f"{task_id}_completion_result.xlsx"
             result_path = self.result_dir / result_filename
             

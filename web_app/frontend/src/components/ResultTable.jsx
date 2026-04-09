@@ -1,6 +1,6 @@
 import React from 'react';
-import { Table, Tag, Button, Space, Checkbox, Typography } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Space, Typography } from 'antd';
+import { DownloadOutlined, SaveOutlined, CalendarOutlined, ThunderboltOutlined, StopOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -24,15 +24,15 @@ const ResultTable = ({
                         </Text>
                         {record.cached && (
                             <Tag color="orange" style={{ marginRight: 8 }}>
-                                💾 已缓存
+                                <SaveOutlined /> 已缓存
                             </Tag>
                         )}
                         <Space size={4}>
                             {record.publish_date && (
-                                <Tag color="blue">📅 发布: {record.publish_date}</Tag>
+                                <Tag color="blue"><CalendarOutlined /> 发布: {record.publish_date}</Tag>
                             )}
                             {record.implement_date && (
-                                <Tag color="cyan">⚡ 实施: {record.implement_date}</Tag>
+                                <Tag color="cyan"><ThunderboltOutlined /> 实施: {record.implement_date}</Tag>
                             )}
                             {record.status && (
                                 <Tag color={record.status === '现行' ? 'green' : 'red'}>
@@ -41,7 +41,7 @@ const ResultTable = ({
                             )}
                             {record.has_pdf === false && (
                                 <Tag color="default">
-                                    🚫 无文本
+                                    <StopOutlined /> 无文本
                                 </Tag>
                             )}
                             <Space size={4}>
@@ -53,7 +53,7 @@ const ResultTable = ({
                     </div>
                     {/* 第二行：标准名称 */}
                     <div>
-                        <Text style={{ color: '#666' }}>
+                        <Text style={{ color: 'var(--ant-color-text-secondary)' }}>
                             {record.name}
                         </Text>
                     </div>

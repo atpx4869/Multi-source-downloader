@@ -5,7 +5,6 @@
 """
 import sqlite3
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from contextlib import contextmanager
@@ -155,15 +154,28 @@ class Database:
     
     def update_task(self, task_id: str, updates: Dict[str, Any]):
         """更新任务信息"""
+        # 允许更新的列名白名单，防止 SQL 注入
+        ALLOWED_COLUMNS = {
+            'std_no', 'std_name', 'status', 'priority', 'source', 
+            'max_retries', 'retry_count', 'error_msg', 'file_path', 
+            'metadata'
+        }
+        
         set_clauses = []
         values = []
         
         for key, value in updates.items():
+            if key not in ALLOWED_COLUMNS:
+                raise ValueError(f"Invalid column name: {key}")
+            
             if key == 'metadata':
                 value = json.dumps(value)
             set_clauses.append(f"{key} = ?")
             values.append(value)
         
+        if not set_clauses:
+            return
+            
         values.append(task_id)
         
         with self.get_cursor() as cursor:

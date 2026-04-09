@@ -70,7 +70,7 @@ class BYAdapter(BaseAdapter):
             try:
                 search_results = self._source.search(std_no, page_size=1)
                 item = search_results[0] if search_results else None
-            except:
+            except Exception:
                 item = None
             
             if not item:
@@ -100,5 +100,5 @@ class BYAdapter(BaseAdapter):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, self._source.search, "GB")
             return True
-        except:
+        except Exception:
             return False

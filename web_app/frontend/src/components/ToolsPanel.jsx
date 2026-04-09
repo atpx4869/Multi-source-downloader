@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Button, Space } from 'antd';
+import { Card, Button, Flex } from 'antd';
 import {
     FileSearchOutlined,
     FileExcelOutlined,
@@ -11,18 +11,14 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
         <Card
             title={<><FileSearchOutlined /> 工具箱</>}
             size="small"
-            bodyStyle={{ padding: '12px' }}
+            styles={{ body: { padding: '12px' } }}
         >
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Flex vertical gap="small" style={{ width: '100%' }}>
                 <Button
                     type="primary"
                     icon={<FileSearchOutlined />}
                     onClick={onStandardCheck}
                     block
-                    style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        border: 'none'
-                    }}
                 >
                     标准查新
                 </Button>
@@ -30,11 +26,6 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
                     icon={<CloudDownloadOutlined />}
                     onClick={onBatchImport}
                     block
-                    style={{
-                        background: '#1890ff',
-                        color: 'white',
-                        border: 'none'
-                    }}
                 >
                     批量导入
                 </Button>
@@ -42,15 +33,10 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
                     icon={<FileExcelOutlined />}
                     onClick={onExcelExport}
                     block
-                    style={{
-                        background: '#52c41a',
-                        color: 'white',
-                        border: 'none'
-                    }}
                 >
                     Excel 导出
                 </Button>
-            </Space>
+            </Flex>
         </Card>
     );
 };

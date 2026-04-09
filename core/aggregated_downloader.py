@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import re
 import time
-import sys
 
 from core.unified_models import Standard, natural_key
 
@@ -393,7 +392,7 @@ class AggregatedDownloader:
 
                 # 如果文件损坏，删除后重新下载
                 if not is_valid_pdf:
-                    logs.append(f"[INFO] 删除损坏的缓存文件，准备重新下载")
+                    logs.append("[INFO] 删除损坏的缓存文件，准备重新下载")
                     try:
                         cached_path.unlink()
                     except Exception as e:
@@ -401,7 +400,7 @@ class AggregatedDownloader:
             else:
                 # 文件存在但大小为0（可能是下载中断），删除后重新下载
                 logs.append(f"[WARN] 检测到空文件: {cached_path.name} (大小: 0 bytes)")
-                logs.append(f"[INFO] 删除空文件，准备重新下载")
+                logs.append("[INFO] 删除空文件，准备重新下载")
                 try:
                     cached_path.unlink()
                 except Exception as e:

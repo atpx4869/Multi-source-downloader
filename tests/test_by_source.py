@@ -11,7 +11,6 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from sources.by import BYSource
-from core.models import Standard
 
 
 def test_by_availability():

@@ -2,10 +2,9 @@
 """
 标准查新 API 路由
 """
-import os
 import uuid
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 

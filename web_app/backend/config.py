@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["*"]
     
     # 搜索配置
-    SEARCH_TIMEOUT: int = 8
+    SEARCH_TIMEOUT: int = 20
     SEARCH_LIMIT: int = 100
     
     # 下载配置

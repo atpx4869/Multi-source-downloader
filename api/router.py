@@ -4,10 +4,9 @@ API Router - API 路由和编排
 """
 from typing import Dict, List, Optional, Callable
 import concurrent.futures
-import functools
 from api.models import (
-    SourceType, StandardInfo, SearchResponse, 
-    DownloadResponse, DownloadStatus, HealthResponse, SourceHealth
+    SourceType, SearchResponse, 
+    DownloadResponse, DownloadStatus, HealthResponse
 )
 from api.base import BaseSourceAPI
 from api.by_api import BYSourceAPI

@@ -12,7 +12,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 import time
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 
 def print_header(title: str):
@@ -68,7 +68,7 @@ def test_source(source_name: str, source_class, test_keyword: str = "GB/T 3324")
                 return result
 
         # 执行搜索
-        print(f"    正在搜索...")
+        print("    正在搜索...")
         results = source.search(test_keyword, page_size=5)
         elapsed = time.time() - start_time
 
@@ -85,13 +85,13 @@ def test_source(source_name: str, source_class, test_keyword: str = "GB/T 3324")
                 "has_pdf": item.has_pdf
             })
 
-        print(f"    [OK] 搜索成功")
+        print("    [OK] 搜索成功")
         print(f"    结果数量: {len(results)}")
         print(f"    耗时: {elapsed:.3f}s")
 
         # 显示样本结果
         if results:
-            print(f"\n    样本结果:")
+            print("\n    样本结果:")
             for i, item in enumerate(results[:3], 1):
                 print(f"    {i}. {item.std_no} - {item.name[:40]}...")
                 pdf_text = "[OK]" if item.has_pdf else "[X]"
@@ -147,12 +147,12 @@ def test_connection_pool():
         session = pool_manager.create_session(timeout=10, max_retries=2)
 
         print("[OK] 连接池管理器创建成功")
-        print(f"  连接池配置:")
+        print("  连接池配置:")
         print(f"    - 连接数: {pool_manager.pool_connections}")
         print(f"    - 最大连接: {pool_manager.pool_maxsize}")
-        print(f"  Session 配置:")
-        print(f"    - 代理: 已禁用")
-        print(f"    - 重试: 已启用")
+        print("  Session 配置:")
+        print("    - 代理: 已禁用")
+        print("    - 重试: 已启用")
 
         # 测试连接
         print("\n  测试连接...")
@@ -222,7 +222,7 @@ def main():
     total_count = len(test_results)
 
     print(f"\n总体结果: {success_count}/{total_count} 个源测试通过")
-    print(f"\n详细结果:")
+    print("\n详细结果:")
     print(f"{'源':<10} {'状态':<15} {'结果数':<10} {'耗时':<10} {'备注':<30}")
     print("─" * 80)
 
@@ -243,7 +243,7 @@ def main():
 
     # 性能对比
     if success_count > 0:
-        print(f"\n性能对比:")
+        print("\n性能对比:")
         successful_results = [r for r in test_results if r and r.get("success", False)]
         if successful_results:
             avg_time = sum(r["elapsed_time"] for r in successful_results) / len(successful_results)
@@ -255,15 +255,15 @@ def main():
             print(f"  最慢: {slowest['source']} ({slowest['elapsed_time']:.3f}s)")
 
             # 优化效果评估
-            print(f"\n优化效果评估:")
+            print("\n优化效果评估:")
             if avg_time < 2.0:
-                print(f"  [OK] 优秀 - 平均搜索时间 < 2秒")
+                print("  [OK] 优秀 - 平均搜索时间 < 2秒")
             elif avg_time < 3.0:
-                print(f"  [OK] 良好 - 平均搜索时间 < 3秒")
+                print("  [OK] 良好 - 平均搜索时间 < 3秒")
             elif avg_time < 5.0:
-                print(f"  [!] 一般 - 平均搜索时间 < 5秒")
+                print("  [!] 一般 - 平均搜索时间 < 5秒")
             else:
-                print(f"  [X] 需要优化 - 平均搜索时间 > 5秒")
+                print("  [X] 需要优化 - 平均搜索时间 > 5秒")
 
     print("\n" + "=" * 80)
     print("测试完成！")

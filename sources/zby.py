@@ -6,19 +6,16 @@ This module avoids importing Playwright at module-import time so it is safe
 to include in frozen executables. If Playwright is needed it will be loaded
 only at runtime by explicit callers.
 """
-import asyncio
 import re
 import json
 import logging
 import random
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
-from urllib.parse import quote
+from typing import List, Union
 import tempfile
 import shutil
 import os
 import urllib3
-import logging
 
 # 抑制 urllib3 的 SSL 验证警告（我们故意禁用 SSL 验证以兼容国内网站）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,9 +41,7 @@ from .base import BaseSource, DownloadResult
 from .registry import registry
 from .zby_utils import (
     extract_uuid_from_text,
-    extract_all_uuids_from_text,
-    download_images_to_pdf,
-    sanitize_log_message
+    download_images_to_pdf
 )
 
 # 导入超时配置
@@ -139,6 +134,9 @@ class ZBYSource(BaseSource):
     DOWNLOAD_TIMEOUT = get_timeout("ZBY", "download")
     API_TIMEOUT = get_timeout("ZBY", "api")
 
+    # 临时覆盖缩短搜索超时
+    SEARCH_TIMEOUT = 15
+
     # 类级别的配置缓存（所有实例共享）
     _api_base_url_cache = None
     _cache_timestamp = 0
@@ -175,12 +173,32 @@ class ZBYSource(BaseSource):
         
         # 统一初始化 session
         import requests
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
         self.session = requests.Session()
         self.session.headers.update({
              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
              "Referer": "https://bz.zhenggui.vip",
         })
         self.session.trust_env = False  # 禁用系统代理
+        
+        # 增加强大的重试策略和更大的连接池
+        retry_strategy = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+        )
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=20,
+            pool_maxsize=20
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
 
         # 尝试从前端 config.yaml 读取真实 API 基址（使用缓存）
         try:
@@ -208,28 +226,18 @@ class ZBYSource(BaseSource):
         return url
 
     def _load_api_base_url_from_config(self, timeout: int = 4) -> str:
-        """从 https://bz.zhenggui.vip/config.yaml 读取 BZY_BASE_URL。
-
-        config.yaml 内容很简单，这里用正则解析，避免引入 PyYAML。
-        """
+        """从 config.yaml 读取真实 API 基址"""
         try:
-            import requests
-        except Exception:
-            return ""
-        try:
-            url = f"{DEFAULT_BASE_URL}/config.yaml"
-            s = requests.Session()
-            s.trust_env = False
-            r: Response = s.get(url, timeout=timeout, proxies={"http": None, "https": None})
-            if getattr(r, 'status_code', 0) != 200:
-                return ""
-            text = r.text or ""
-            m = re.search(r"BZY_BASE_URL:\s*['\"]([^'\"]+)['\"]" , text)
-            if not m:
-                return ""
-            return (m.group(1) or "").strip()
-        except Exception:
-            return ""
+            config_url = f"{self.base_url}/config.yaml"
+            resp = self.session.get(config_url, timeout=(timeout, timeout), verify=False)
+            if resp.status_code == 200:
+                import yaml
+                data = yaml.safe_load(resp.text)
+                if data and "BZY_BASE_URL" in data:
+                    return data["BZY_BASE_URL"].rstrip("/")
+        except Exception as e:
+            logger.debug(f"[ZBY] _load_api_base_url_from_config failed: {e}")
+        return "https://login.bz.zhenggui.vip"
 
     def _mirror_debug_file(self, p: Path) -> None:
         try:
@@ -268,7 +276,7 @@ class ZBYSource(BaseSource):
                         verify=False  # 禁用 SSL 验证（国内站点常见问题）
                     )
                     return 200 <= getattr(r, 'status_code', 0) < 400
-                except Exception as e:
+                except Exception:
                     # 备用方案：尝试连接 API 端点
                     try:
                         api_url = "https://login.bz.zhenggui.vip/bzy-api/org/std/search"
@@ -331,16 +339,9 @@ class ZBYSource(BaseSource):
         items = []
         try:
             import requests
-            from requests.adapters import HTTPAdapter
-            from urllib3.util.retry import Retry
 
-            session = requests.Session()
-            session.trust_env = False  # 忽略系统代理
-            # 搜索时允许 1 次重试，快速失败策略
-            retries = Retry(total=1, backoff_factor=0.3, status_forcelist=(500, 502, 503, 504))
-            adapter = HTTPAdapter(max_retries=retries)
-            session.mount('https://', adapter)
-            session.mount('http://', adapter)
+            # Session reuse
+            session = self.session
 
             from .zby_http import search_via_api
             
@@ -367,9 +368,14 @@ class ZBYSource(BaseSource):
             keywords_to_try = list(dict.fromkeys(keywords_to_try))
 
             rows = []
+            api_url = f"{self.api_base_url}/bzy-api/org/std/search" if self.api_base_url else None
             for kw in keywords_to_try:
                 try:
-                    rows = search_via_api(kw, page=page, page_size=page_size, session=session, timeout=8)
+                    # 搜索时允许重试，传入元组超时时间
+                    if api_url:
+                        rows = search_via_api(kw, page=page, page_size=page_size, session=session, api_url=api_url, timeout=(5, self.SEARCH_TIMEOUT))
+                    else:
+                        rows = search_via_api(kw, page=page, page_size=page_size, session=session, timeout=(5, self.SEARCH_TIMEOUT))
                     if rows:
                         # 过滤结果，确保标准类型和编号都匹配
                         filtered_rows = []
@@ -433,7 +439,7 @@ class ZBYSource(BaseSource):
                                 impl_date = str(impl)[:10]
                                 if impl_date and impl_date < datetime.now().strftime('%Y-%m-%d'):
                                     status = '现行'
-                            except:
+                            except Exception:
                                 pass
                         
                         # 提取替代标准信息
@@ -449,7 +455,7 @@ class ZBYSource(BaseSource):
                             try:
                                 from core.replacement_db import get_replacement_standard
                                 replace_std = get_replacement_standard(std_no)
-                            except:
+                            except Exception:
                                 pass
                         
                         meta = row
@@ -598,7 +604,7 @@ class ZBYSource(BaseSource):
         # 3. Get UUID
         has_pdf_hint = meta.get("_has_pdf", meta.get("hasPdf", True))
         if not has_pdf_hint and has_pdf_hint is not None:
-             emit(f"ZBY: [INFO] Standard metadata indicates no PDF available (hasPdf=0). Skipping UUID extraction.")
+             emit("ZBY: [INFO] Standard metadata indicates no PDF available (hasPdf=0). Skipping UUID extraction.")
              uuid, page_count, pdf_name = None, 0, ""
         else:
              uuid, page_count, pdf_name = self._get_uuid_via_api(std_id, emit)
@@ -634,15 +640,6 @@ class ZBYSource(BaseSource):
     def _get_standard_details(self, std_id: Union[str, int], emit: callable):
         emit(f"ZBY: Fetching details for std_id={std_id}...")
         
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Content-Type": "application/json;charset=UTF-8",
-            "Origin": "https://bz.zhenggui.vip",
-            "Referer": f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}&docStatus=0"
-        })
-        session.verify = False
-
         base_url = "https://login.bz.zhenggui.vip/bzy-api/org/standard/stdcontent"
         
         # New correct payload
@@ -659,8 +656,14 @@ class ZBYSource(BaseSource):
         
         query_params = _get_request_must_params("zby_org")
         
+        headers = {
+            "Content-Type": "application/json;charset=UTF-8",
+            "Origin": "https://bz.zhenggui.vip",
+            "Referer": f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}&docStatus=0"
+        }
+        
         try:
-            r = session.post(base_url, params=query_params, json=payload, timeout=10)
+            r = self.session.post(base_url, params=query_params, json=payload, headers=headers, timeout=(5, self.API_TIMEOUT))
             if r.status_code == 200:
                 data = r.json()
                 if data.get("code") == 1 and data.get("data"):
@@ -686,15 +689,6 @@ class ZBYSource(BaseSource):
     def _get_uuid_via_api(self, std_id: Union[str, int], emit: callable):
         emit(f"ZBY: Extracting UUID for std_id={std_id}...")
         
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Content-Type": "application/json;charset=UTF-8",
-            "Origin": "https://bz.zhenggui.vip",
-            "Referer": f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}&docStatus=0"
-        })
-        session.verify = False
-
         base_url = "https://login.bz.zhenggui.vip/bzy-api/org/standard/getPdfList"
         
         payload = {
@@ -706,8 +700,14 @@ class ZBYSource(BaseSource):
         
         query_params = _get_request_must_params("zby_org")
         
+        headers = {
+            "Content-Type": "application/json;charset=UTF-8",
+            "Origin": "https://bz.zhenggui.vip",
+            "Referer": f"https://bz.zhenggui.vip/standardDetail?standardId={std_id}&docStatus=0"
+        }
+        
         try:
-            r = session.post(base_url, params=query_params, json=payload, timeout=10)
+            r = self.session.post(base_url, params=query_params, json=payload, headers=headers, timeout=(5, self.API_TIMEOUT))
             
             if r.status_code == 200:
                 data = r.json()
@@ -765,11 +765,8 @@ class ZBYSource(BaseSource):
         if temp_dir.exists(): shutil.rmtree(temp_dir)
         temp_dir.mkdir(parents=True, exist_ok=True)
         
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://preview.imm.aliyun.com/",
-        })
+        # Reuse self.session (which has a connection pool of 20 connections)
+        session = self.session
         
         # helper: try download a single page
         def download_page(page_num):
@@ -781,7 +778,8 @@ class ZBYSource(BaseSource):
             
             for url in base_urls:
                 try:
-                    r = session.get(url, timeout=10)
+                    # Fetch image with retry mechanism enabled via self.session
+                    r = session.get(url, timeout=(5, self.DOWNLOAD_TIMEOUT), verify=False)
                     if r.status_code == 200:
                         ct = r.headers.get("Content-Type", "").lower()
                         ext = ".png" if "png" in ct else ".jpg"
@@ -791,7 +789,7 @@ class ZBYSource(BaseSource):
                         return page_num, save_path
                     elif r.status_code == 404:
                         continue
-                except:
+                except Exception:
                     pass
             return page_num, None
 
@@ -908,8 +906,8 @@ class ZBYSource(BaseSource):
             pdf_links = re.findall(r'(https?://[^\s"<>]+\.pdf)', html, re.IGNORECASE)
             for pdf_url in pdf_links:
                 try:
-                    emit(f"ZBY: 尝试直接下载 PDF 链接...")
-                    r = session.get(pdf_url, timeout=20, stream=True, proxies={"http": None, "https": None})
+                    emit("ZBY: 尝试直接下载 PDF 链接...")
+                    r = session.get(pdf_url, timeout=(5, self.DOWNLOAD_TIMEOUT), stream=True, proxies={"http": None, "https": None}, verify=False)
                     if r.status_code == 200:
                         output_path = output_dir / item.filename()
                         output_dir.mkdir(parents=True, exist_ok=True)
@@ -917,12 +915,12 @@ class ZBYSource(BaseSource):
                             for chunk in r.iter_content(8192):
                                 if chunk:
                                     f.write(chunk)
-                        emit(f"ZBY: PDF 下载成功")
+                        emit("ZBY: PDF 下载成功")
                         return output_path, []
                 except Exception:
                     continue
 
-            emit(f"ZBY: 从详情页无法提取到文档资源")
+            emit("ZBY: 从详情页无法提取到文档资源")
             return None
 
         except Exception as e:
@@ -1131,7 +1129,7 @@ class ZBYSource(BaseSource):
                         if url.lower().endswith('.pdf') or 'download' in url or 'pdf' in url:
                             import requests
                             # 显式禁用代理
-                            r: Response = requests.get(url, timeout=20, stream=True, proxies={"http": None, "https": None})
+                            r: Response = requests.get(url, timeout=(5, self.DOWNLOAD_TIMEOUT), stream=True, proxies={"http": None, "https": None}, verify=False)
                             if r.status_code == 200:
                                 outp = output_dir / item.filename()
                                 with open(outp, 'wb') as f:
@@ -1179,7 +1177,7 @@ class ZBYSource(BaseSource):
                         for did in detail_ids[:5]: # 只尝试前5个
                             detail_url = f"{self.base_url}/standard/detail/{did}"
                             try:
-                                emit(f"ZBY: 尝试跟进详情页...")
+                                emit("ZBY: 尝试跟进详情页...")
                                 rd: Response = session.get(detail_url, timeout=8, proxies={"http": None, "https": None})
                                 td = getattr(rd, 'text', '') or ''
                                 uuid2 = extract_uuid_from_text(td)

@@ -11,6 +11,7 @@ on:
 env:
   VERSION: "4.0.0"
   NUITKA_VERSION: "1.8.0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-nuitka-win10:
@@ -77,6 +78,23 @@ jobs:
           --windows-icon-from-ico=app.ico `
           --include-data-file=core/logo.png=core/logo.png `
           --include-data-file=app/.auth_cache=app/.auth_cache `
+          --include-data-dir=config=config `
+          --include-package-data=playwright `
+          --include-package=playwright `
+          --include-package=sqlalchemy `
+          --include-package=httpx `
+          --include-package=requests `
+          --include-package=urllib3 `
+          --include-package=openpyxl `
+          --include-package=chardet `
+          --include-package=lxml `
+          --include-module=PySide6.QtNetwork `
+          --nofollow-import-to=matplotlib `
+          --nofollow-import-to=scipy `
+          --nofollow-import-to=tkinter `
+          --nofollow-import-to=jupyter `
+          --nofollow-import-to=IPython `
+          --nofollow-import-to=pytest `
           --assume-yes-for-downloads `
           --output-dir=dist `
           --company-name="MultiSourceDownloader" `
@@ -84,7 +102,7 @@ jobs:
           --file-version=4.0.0 `
           --product-version=4.0.0 `
           --file-description="Multi-Source Downloader" `
-          desktop_app.py
+          app_v2/main.py
         if ($LASTEXITCODE -eq 0) {
           Write-Host "Nuitka compilation completed successfully" -ForegroundColor Green
         } else {
@@ -95,11 +113,11 @@ jobs:
     
     - name: Verify executable
       run: |
-        if (Test-Path "dist/desktop_app.exe") {
-          $exe = Get-Item "dist/desktop_app.exe"
+        if (Test-Path "dist/main.exe") {
+          $exe = Get-Item "dist/main.exe"
           Write-Host "✓ Executable created: $($exe.Name)" -ForegroundColor Green
           Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB" -ForegroundColor Green
-          Rename-Item -Path "dist/desktop_app.exe" -NewName "MultiSourceDownloader.exe"
+          Rename-Item -Path "dist/main.exe" -NewName "MultiSourceDownloader.exe"
           Write-Host "✓ Renamed to MultiSourceDownloader.exe" -ForegroundColor Green
         } else {
           Write-Host "✗ Executable not found!" -ForegroundColor Red
@@ -242,6 +260,23 @@ jobs:
           --windows-icon-from-ico=app.ico `
           --include-data-file=core/logo.png=core/logo.png `
           --include-data-file=app/.auth_cache=app/.auth_cache `
+          --include-data-dir=config=config `
+          --include-package-data=playwright `
+          --include-package=playwright `
+          --include-package=sqlalchemy `
+          --include-package=httpx `
+          --include-package=requests `
+          --include-package=urllib3 `
+          --include-package=openpyxl `
+          --include-package=chardet `
+          --include-package=lxml `
+          --include-module=PySide2.QtNetwork `
+          --nofollow-import-to=matplotlib `
+          --nofollow-import-to=scipy `
+          --nofollow-import-to=tkinter `
+          --nofollow-import-to=jupyter `
+          --nofollow-import-to=IPython `
+          --nofollow-import-to=pytest `
           --assume-yes-for-downloads `
           --output-dir=dist `
           --company-name="MultiSourceDownloader" `
@@ -249,7 +284,7 @@ jobs:
           --file-version=4.0.0 `
           --product-version=4.0.0 `
           --file-description="Multi-Source Downloader (Win7 Compatible)" `
-          desktop_app.py
+          app_v2/main.py
         if ($LASTEXITCODE -eq 0) {
           Write-Host "Nuitka compilation completed successfully" -ForegroundColor Green
         } else {
@@ -260,11 +295,11 @@ jobs:
     
     - name: Verify executable
       run: |
-        if (Test-Path "dist/desktop_app.exe") {
-          $exe = Get-Item "dist/desktop_app.exe"
+        if (Test-Path "dist/main.exe") {
+          $exe = Get-Item "dist/main.exe"
           Write-Host "✓ Executable created: $($exe.Name)" -ForegroundColor Green
           Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB" -ForegroundColor Green
-          Rename-Item -Path "dist/desktop_app.exe" -NewName "MultiSourceDownloader-Win7.exe"
+          Rename-Item -Path "dist/main.exe" -NewName "MultiSourceDownloader-Win7.exe"
           Write-Host "✓ Renamed to MultiSourceDownloader-Win7.exe" -ForegroundColor Green
         } else {
           Write-Host "✗ Executable not found!" -ForegroundColor Red

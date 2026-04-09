@@ -50,8 +50,8 @@ class OCR:
         if (width, height) != new_unpad:
             im = im.resize(new_unpad, Image.BILINEAR)
             
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+        top, _bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+        left, _right = int(round(dw - 0.1)), int(round(dw + 0.1))
         
         # Create new image with padding
         new_im = Image.new('RGB', new_shape, color)

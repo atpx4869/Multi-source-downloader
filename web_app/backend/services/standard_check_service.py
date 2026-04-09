@@ -3,15 +3,13 @@
 标准查新服务
 批量查询标准元数据（发布日期、实施日期、状态、替代标准等）
 """
-import os
 import sys
 import re
 import uuid
 import time
-import asyncio
 import threading
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 import pandas as pd
 
@@ -308,7 +306,7 @@ class StandardCheckService:
                 for encoding in ['utf-8', 'gbk', 'gb2312', 'utf-8-sig']:
                     try:
                         return pd.read_csv(file_path, encoding=encoding)
-                    except:
+                    except Exception:
                         continue
                 return None
             elif file_ext == '.txt':
@@ -406,7 +404,7 @@ class StandardCheckService:
                                 if ord(char) > 127:
                                     cell_length += 1
                             max_length = max(max_length, cell_length)
-                    except:
+                    except Exception:
                         pass
                 
                 adjusted_width = min(max_length + 2, 50)

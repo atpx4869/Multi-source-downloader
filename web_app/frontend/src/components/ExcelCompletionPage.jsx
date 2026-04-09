@@ -11,7 +11,8 @@ import {
     Row,
     Col,
     Alert,
-    Table
+    Table,
+    Flex
 } from 'antd';
 import {
     UploadOutlined,
@@ -29,7 +30,7 @@ const { Text } = Typography;
 const { Dragger } = Upload;
 
 // API 基础 URL
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const ExcelCompletionPage = ({ onBack }) => {
     const [file, setFile] = useState(null);
@@ -143,7 +144,7 @@ const ExcelCompletionPage = ({ onBack }) => {
     };
 
     return (
-        <div style={{ padding: '16px', background: '#f0f2f5', minHeight: '100vh' }}>
+        <div style={{ padding: '24px', background: 'var(--ant-color-bg-layout)', minHeight: '100vh', boxSizing: 'border-box' }}>
             <Card
                 title={
                     <Space>
@@ -157,7 +158,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                                 返回搜索
                             </Button>
                         )}
-                        <FileExcelOutlined style={{ fontSize: 20, color: '#52c41a' }} />
+                        <FileExcelOutlined style={{ fontSize: 20, color: 'var(--ant-color-success)' }} />
                         <span>Excel 导出 - 标准号补全</span>
                     </Space>
                 }
@@ -168,7 +169,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                     <Col span={16}>
                         <Dragger {...uploadProps} style={{ marginBottom: 16 }}>
                             <p className="ant-upload-drag-icon">
-                                <CloudUploadOutlined style={{ color: '#1890ff', fontSize: 48 }} />
+                                <CloudUploadOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 48 }} />
                             </p>
                             <p className="ant-upload-text">点击或拖拽文件到这里</p>
                             <p className="ant-upload-hint">
@@ -177,7 +178,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                         </Dragger>
                     </Col>
                     <Col span={8}>
-                        <Space direction="vertical" style={{ width: '100%' }}>
+                        <Flex vertical gap="small" style={{ width: '100%' }}>
                             <Button
                                 type="primary"
                                 icon={<UploadOutlined />}
@@ -186,10 +187,6 @@ const ExcelCompletionPage = ({ onBack }) => {
                                 disabled={!file}
                                 block
                                 size="large"
-                                style={{
-                                    background: '#52c41a',
-                                    borderColor: '#52c41a'
-                                }}
                             >
                                 开始补全
                             </Button>
@@ -200,7 +197,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                             >
                                 重置
                             </Button>
-                        </Space>
+                        </Flex>
                     </Col>
                 </Row>
 
@@ -259,7 +256,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                         title="处理日志"
                         size="small"
                         style={{ maxHeight: 200, overflow: 'auto' }}
-                        bodyStyle={{ padding: '8px 12px' }}
+                        styles={{ body: { padding: '8px 12px' } }}
                     >
                         {taskStatus.logs?.map((log, index) => (
                             <div key={index} style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 0' }}>

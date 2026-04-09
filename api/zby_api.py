@@ -136,7 +136,7 @@ class ZBYSourceAPI(BaseSourceAPI):
                 return health
             
             # 尝试简单的搜索来检查连通性
-            result = self.source.search("GB")
+            self.source.search("GB")
             health.available = True
             health.response_time = (time.time() - start_time) * 1000  # 转换为毫秒
             health.last_check = time.time()

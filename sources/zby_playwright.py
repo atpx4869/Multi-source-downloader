@@ -5,10 +5,8 @@ ZBY Source - Playwright-based implementation (CLEAN REWRITE)
 import re
 import time
 import requests
-import shutil
-import img2pdf
 from pathlib import Path
-from typing import List, Callable, Optional, Union
+from typing import List, Callable, Optional
 from .zby_utils import download_images_to_pdf
 from core.models import Standard
 
@@ -70,51 +68,53 @@ class ZBYSource:
 			
 			with sync_playwright() as p:
 				browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
-				context = browser.new_context()
-				page = context.new_page()
-				
-				# 1. 监听 UUID 请求
-				found = {"uuid": None}
-				def capture_req(r):
-					if "immdoc" in r.url and "/doc/" in r.url:
-						m = re.search(r'immdoc/([a-zA-Z0-9-]+)/doc', r.url)
-						if m:
-							found["uuid"] = m.group(1)
-				
-				page.on("request", capture_req)
-				
-				# 2. 访问详情页
 				try:
-					detail_url = f"{self.base_url}/standardDetail?standardId={std_id}&docStatus=0"
-					page.goto(detail_url, timeout=45000)
+					context = browser.new_context()
+					page = context.new_page()
 					
-					# 3. 等待并滚动触发资源加载
-					emit("ZBY: 页面加载完成，滚动以触发资源...")
+					# 1. 监听 UUID 请求
+					found = {"uuid": None}
+					def capture_req(r):
+						if "immdoc" in r.url and "/doc/" in r.url:
+							m = re.search(r'immdoc/([a-zA-Z0-9-]+)/doc', r.url)
+							if m:
+								found["uuid"] = m.group(1)
+					
+					page.on("request", capture_req)
+					
+					# 2. 访问详情页
 					try:
-						# 尝试定位预览区域 (根据用户反馈是 #aliyunPreview 或内部滚动条)
-						preview = page.wait_for_selector("#aliyunPreview", timeout=15000)
-						if preview:
-							preview.hover()
-							# 针对预览区域滚动
-							for _ in range(5):
-								page.mouse.wheel(0, 500)
-								time.sleep(0.5)
-					except Exception:
-						emit("ZBY: 预览区定位超时，使用全局滚动尝试")
-						for _ in range(5):
-							page.mouse.wheel(0, 1000)
-							time.sleep(0.5)
-
-					# 4. 等待捕获结果
-					for i in range(20):
-						if found["uuid"]: break
-						time.sleep(0.5)
+						detail_url = f"{self.base_url}/standardDetail?standardId={std_id}&docStatus=0"
+						page.goto(detail_url, timeout=45000)
 						
-				except Exception as e:
-					emit(f"ZBY: 页面访问或滚动异常: {e}")
-				
-				cookies_list = context.cookies()
-				browser.close()
+						# 3. 等待并滚动触发资源加载
+						emit("ZBY: 页面加载完成，滚动以触发资源...")
+						try:
+							# 尝试定位预览区域 (根据用户反馈是 #aliyunPreview 或内部滚动条)
+							preview = page.wait_for_selector("#aliyunPreview", timeout=15000)
+							if preview:
+								preview.hover()
+								# 针对预览区域滚动
+								for _ in range(5):
+									page.mouse.wheel(0, 500)
+									time.sleep(0.5)
+						except Exception:
+							emit("ZBY: 预览区定位超时，使用全局滚动尝试")
+							for _ in range(5):
+								page.mouse.wheel(0, 1000)
+								time.sleep(0.5)
+
+						# 4. 等待捕获结果
+						for i in range(20):
+							if found["uuid"]: break
+							time.sleep(0.5)
+							
+					except Exception as e:
+						emit(f"ZBY: 页面访问或滚动异常: {e}")
+					
+					cookies_list = context.cookies()
+				finally:
+					browser.close()
 				
 				# 5. 执行并发下载
 				if found["uuid"]:

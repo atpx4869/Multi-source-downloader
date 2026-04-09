@@ -1,12 +1,13 @@
 import axios from 'axios';
+import { message } from 'antd';
 
-// API基础URL
-const API_BASE_URL = 'http://localhost:8000/api';
+// API基础URL (使用环境变量，支持生产环境部署)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // 创建axios实例
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 30000,
+    timeout: 60000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -18,6 +19,7 @@ apiClient.interceptors.request.use(request => {
     return request;
 }, error => {
     console.error('[API Request Error]', error);
+    // message.error('网络请求发送失败，请检查网络连接');
     return Promise.reject(error);
 });
 
@@ -29,12 +31,17 @@ apiClient.interceptors.response.use(response => {
     if (error.response) {
         // 请求已发出，服务器响应状态码不在 2xx 范围
         console.error(`[API Error Response] ${error.response.status} ${error.config.url}`, error.response.data);
+        const errorMsg = error.response.data?.detail || error.response.data?.error || `服务器错误 (${error.response.status})`;
+        // TODO: Move message to component level to avoid antd static function warning
+        // message.error(errorMsg);
     } else if (error.request) {
         // 请求已发出，但没有收到响应
         console.error('[API No Response]', error.request);
+        // message.error('服务器无响应，请检查后台服务是否启动或网络状态');
     } else {
         // 发送请求时触发了错误
         console.error('[API Error Setup]', error.message);
+        // message.error(`请求错误: ${error.message}`);
     }
     return Promise.reject(error);
 });
@@ -42,7 +49,7 @@ apiClient.interceptors.response.use(response => {
 // 搜索API
 export const searchAPI = {
     // 搜索所有数据源
-    searchAll: async (query, sources = null, limit = 100, timeout = 8) => {
+    searchAll: async (query, sources = null, limit = 100, timeout = 10) => {
         const params = { q: query, limit, timeout };
         if (sources && sources.length > 0) {
             params.sources = sources;
@@ -52,7 +59,7 @@ export const searchAPI = {
     },
 
     // 搜索单个数据源
-    searchSingle: async (source, query, limit = 100, timeout = 8) => {
+    searchSingle: async (source, query, limit = 100, timeout = 10) => {
         const response = await apiClient.get(`/search/${source}`, {
             params: { q: query, limit, timeout },
         });
@@ -60,7 +67,7 @@ export const searchAPI = {
     },
 
     // 搜索第一个可用源
-    searchFirstAvailable: async (query, limit = 100, timeout = 8) => {
+    searchFirstAvailable: async (query, limit = 100, timeout = 10) => {
         const response = await apiClient.get('/search/first/available', {
             params: { q: query, limit, timeout },
         });
@@ -71,16 +78,14 @@ export const searchAPI = {
 // 下载API
 export const downloadAPI = {
     // 从指定源下载
-    download: async (source, stdNo, outputDir = null) => {
-        const params = outputDir ? { output_dir: outputDir } : {};
-        const response = await apiClient.post(`/download/${source}/${stdNo}`, null, { params });
+    download: async (source, stdNo) => {
+        const response = await apiClient.post(`/download/${source}/${stdNo}`);
         return response.data;
     },
 
     // 从第一个可用源下载
-    downloadFirstAvailable: async (stdNo, outputDir = null) => {
-        const params = outputDir ? { output_dir: outputDir } : {};
-        const response = await apiClient.post(`/download/first/${stdNo}`, null, { params });
+    downloadFirstAvailable: async (stdNo) => {
+        const response = await apiClient.post(`/download/first/${stdNo}`);
         return response.data;
     },
 };

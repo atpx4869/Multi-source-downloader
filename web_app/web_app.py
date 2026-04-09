@@ -19,7 +19,7 @@ import pandas as pd
 project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project_root))
 
-from api import APIRouter, SourceType
+from api import APIRouter
 from web_app.excel_standard_processor import StandardProcessor
 
 # 路径配置（使用绝对路径，防止工作目录变化）

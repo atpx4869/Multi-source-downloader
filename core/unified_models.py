@@ -3,7 +3,7 @@
 统一数据模型 - 合并 core.models.Standard 和 api.models.StandardInfo
 目标：消除模型碎片化，提供单一数据源
 """
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 from enum import Enum
 import re

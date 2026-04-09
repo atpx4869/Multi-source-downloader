@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, List, Progress, Tag, Button, Space, Typography } from 'antd';
+import { Modal, Progress, Tag, Button, Space, Typography } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -8,9 +8,9 @@ const BatchDownloadModal = ({ visible, onClose, downloadQueue }) => {
     const getStatusIcon = (status) => {
         switch (status) {
             case 'success':
-                return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+                return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />;
             case 'error':
-                return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />;
+                return <CloseCircleOutlined style={{ color: 'var(--ant-color-error)' }} />;
             case 'downloading':
                 return <LoadingOutlined />;
             default:
@@ -57,16 +57,26 @@ const BatchDownloadModal = ({ visible, onClose, downloadQueue }) => {
                 </Space>
             </div>
 
-            <List
-                dataSource={downloadQueue}
-                renderItem={(item) => (
-                    <List.Item>
-                        <List.Item.Meta
-                            avatar={getStatusIcon(item.status)}
-                            title={<Text strong>{item.std_no}</Text>}
-                            description={item.name}
-                        />
-                        <div>
+            <div style={{ maxHeight: 400, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6, padding: '0 16px' }}>
+                {downloadQueue.map((item, index) => (
+                    <div 
+                        key={index} 
+                        style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            padding: '12px 0',
+                            borderBottom: index < downloadQueue.length - 1 ? '1px solid #f0f0f0' : 'none'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                            <div style={{ marginTop: 2 }}>{getStatusIcon(item.status)}</div>
+                            <div>
+                                <Text strong style={{ display: 'block' }}>{item.std_no}</Text>
+                                <Text type="secondary" style={{ fontSize: 13 }}>{item.name}</Text>
+                            </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
                             {getStatusTag(item)}
                             {item.error && (
                                 <Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
@@ -74,10 +84,9 @@ const BatchDownloadModal = ({ visible, onClose, downloadQueue }) => {
                                 </Text>
                             )}
                         </div>
-                    </List.Item>
-                )}
-                style={{ maxHeight: 400, overflow: 'auto' }}
-            />
+                    </div>
+                ))}
+            </div>
         </Modal>
     );
 };

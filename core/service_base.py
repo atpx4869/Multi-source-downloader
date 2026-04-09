@@ -14,7 +14,6 @@ from typing import Callable, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-from pathlib import Path
 
 
 class TaskStatus(Enum):

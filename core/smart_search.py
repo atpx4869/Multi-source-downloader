@@ -8,7 +8,7 @@
 """
 import re
 import concurrent.futures
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 from functools import lru_cache
 
 if TYPE_CHECKING:
@@ -164,7 +164,7 @@ class SmartSearchThread:
         from pathlib import Path
         project_root = Path(__file__).parent.parent
         sys.path.insert(0, str(project_root))
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
 
         # 检测是否是 GB/T 或 GB 标准
         is_gb_std = StandardSearchMerger.is_gb_standard(keyword)
@@ -179,18 +179,16 @@ class SmartSearchThread:
 
         def search_zby():
             try:
-                dl = AggregatedDownloader(enable_sources=["ZBY"], output_dir=output_dir)
-                items = dl.search(keyword, parallel=False)
-                return items  # 直接返回 UnifiedStandard 列表
+                items = downloader.search_single_source("ZBY", keyword)
+                return items
             except Exception as e:
                 print(f"[SmartSearch] ZBY 搜索失败: {e}")
                 return []
 
         def search_gbw():
             try:
-                dl = AggregatedDownloader(enable_sources=["GBW"], output_dir=output_dir)
-                items = dl.search(keyword, parallel=False)
-                return items  # 直接返回 UnifiedStandard 列表
+                items = downloader.search_single_source("GBW", keyword)
+                return items
             except Exception as e:
                 print(f"[SmartSearch] GBW 搜索失败: {e}")
                 return []

@@ -31,7 +31,7 @@ def main():
         print("用户取消登录")
         return 0
     
-    print(f"密码验证成功，启动主窗口...")
+    print("密码验证成功，启动主窗口...")
     
     # 创建主窗口
     window = ModernMainWindow()

@@ -90,7 +90,7 @@ class StandardProcessor:
         if not self.source_order:
             self.source_order = [SourceType.GBW, SourceType.BY, SourceType.ZBY]
         
-        print(f"\n优先级顺序（从快到慢）:")
+        print("\n优先级顺序（从快到慢）:")
         for i, st in enumerate(self.source_order, 1):
             speed = self.source_speeds[st]
             if speed != float('inf'):
@@ -228,7 +228,7 @@ class StandardProcessor:
         
         if not current_standards:
             # 如果没有明确标记为现行的，尝试找年份最新的
-            print(f"    ⚠️  未找到明确标记为'现行'的标准，尝试查找最新版本...")
+            print("    ⚠️  未找到明确标记为'现行'的标准，尝试查找最新版本...")
             
             # 提取带年份的标准
             year_standards = []
@@ -320,7 +320,7 @@ class StandardProcessor:
         # 判断是否带年代号
         if self.has_year(std_no):
             # 带年代号，直接查询名称
-            print(f"  → 检测到带年代号，直接查询标准名称")
+            print("  → 检测到带年代号，直接查询标准名称")
             name, error = self.get_standard_name(std_no, is_gb_like=is_gb_like)
             if error:
                 result = (std_no, "", f"查询失败: {error}")
@@ -331,7 +331,7 @@ class StandardProcessor:
             return result
         else:
             # 不带年代号，查找现行标准
-            print(f"  → 检测到不带年代号，查找现行标准")
+            print("  → 检测到不带年代号，查找现行标准")
             full_std_no, name, error = self.search_current_standard(std_no, is_gb_like=is_gb_like)
             if error:
                 result = (std_no, "", f"查询失败: {error}")
@@ -383,21 +383,21 @@ class StandardProcessor:
         
         col_names = list(df.columns)
         if len(col_names) > result_idx_no:
-            result_col_no_name = col_names[result_idx_no]
+            col_names[result_idx_no]
         else:
-            result_col_no_name = f'完整标准号'
+            pass
             
         if len(col_names) > result_idx_name:
-            result_col_name_name = col_names[result_idx_name]
+            col_names[result_idx_name]
         else:
-            result_col_name_name = f'标准名称'
+            pass
         
-        print(f"\n配置:")
+        print("\n配置:")
         print(f"  标准号列: {std_no_col} (列索引 {col_idx})")
         print(f"  开始行: {start_row}")
         print(f"  结果标准号列: {result_col_no}")
         print(f"  结果标准名称列: {result_col_name}")
-        print(f"\n开始处理...")
+        print("\n开始处理...")
         
         # 处理每一行
         success_count = 0
@@ -440,14 +440,14 @@ class StandardProcessor:
         
         try:
             df.to_excel(output_file, index=False)
-            print(f"✅ 保存成功!")
+            print("✅ 保存成功!")
         except Exception as e:
             print(f"❌ 保存失败: {e}")
             return
         
         # 统计
         print(f"\n{'='*60}")
-        print(f"📊 处理统计:")
+        print("📊 处理统计:")
         print(f"  成功: {success_count}")
         print(f"  失败: {fail_count}")
         print(f"  总计: {success_count + fail_count}")
