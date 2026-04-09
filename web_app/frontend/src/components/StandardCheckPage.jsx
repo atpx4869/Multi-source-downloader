@@ -13,7 +13,8 @@ import {
     Divider,
     Row,
     Col,
-    Alert
+    Alert,
+    Flex
 } from 'antd';
 import {
     UploadOutlined,
@@ -31,7 +32,7 @@ const { Title, Text } = Typography;
 const { Dragger } = Upload;
 
 // API 基础 URL
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const StandardCheckPage = ({ onBack }) => {
     const [file, setFile] = useState(null);
@@ -242,7 +243,7 @@ const StandardCheckPage = ({ onBack }) => {
                                 onChange={setSources}
                             />
                         </Card>
-                        <Space direction="vertical" style={{ width: '100%' }}>
+                        <Flex vertical gap="small" style={{ width: '100%' }}>
                             <Button
                                 type="primary"
                                 icon={<UploadOutlined />}
@@ -252,7 +253,7 @@ const StandardCheckPage = ({ onBack }) => {
                                 block
                                 size="large"
                             >
-                                开始查询
+                                开始查新
                             </Button>
                             <Button
                                 icon={<ReloadOutlined />}
@@ -261,7 +262,7 @@ const StandardCheckPage = ({ onBack }) => {
                             >
                                 重置
                             </Button>
-                        </Space>
+                        </Flex>
                     </Col>
                 </Row>
 
@@ -320,7 +321,7 @@ const StandardCheckPage = ({ onBack }) => {
                         title="处理日志"
                         size="small"
                         style={{ maxHeight: 200, overflow: 'auto' }}
-                        bodyStyle={{ padding: '8px 12px' }}
+                        styles={{ body: { padding: '8px 12px' } }}
                     >
                         {taskStatus.logs?.map((log, index) => (
                             <div key={index} style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 0' }}>

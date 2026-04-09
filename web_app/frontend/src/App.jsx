@@ -162,7 +162,8 @@ function App() {
       const resultsWithCache = await Promise.all(
         targetItems.map(async (item) => {
           try {
-            const url = `http://localhost:8000/api/download/check-cache/${encodeURIComponent(item.std_no)}`;
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+            const url = `${apiBase}/download/check-cache/${encodeURIComponent(item.std_no)}`;
             const response = await fetch(url);
             const cacheData = await response.json();
             return { ...item, cached: cacheData.cached };
@@ -209,7 +210,8 @@ function App() {
     const resultsWithCache = await Promise.all(
       targetItems.map(async (item) => {
         try {
-          const url = `http://localhost:8000/api/download/check-cache/${encodeURIComponent(item.std_no)}`;
+          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+          const url = `${apiBase}/download/check-cache/${encodeURIComponent(item.std_no)}`;
           const response = await fetch(url);
           const cacheData = await response.json();
           return { ...item, cached: cacheData.cached };
@@ -255,8 +257,10 @@ function App() {
   const triggerBrowserDownload = async (filename) => {
     try {
       // 从静态文件目录下载
-      const apiBase = 'http://localhost:8000';
-      const url = `${apiBase}/downloads/${encodeURIComponent(filename)}`;
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+      // 由于静态文件在 /downloads 下，我们需要从 API_BASE_URL 提取出主机部分
+      const apiHost = new URL(apiBaseUrl).origin;
+      const url = `${apiHost}/downloads/${encodeURIComponent(filename)}`;
 
       // 使用 fetch + blob 方式强制下载，避免浏览器直接打开 PDF
       const response = await fetch(url);

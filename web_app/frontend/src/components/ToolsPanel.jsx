@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Button, Space } from 'antd';
+import { Card, Button, Flex } from 'antd';
 import {
     FileSearchOutlined,
     FileExcelOutlined,
@@ -11,9 +11,9 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
         <Card
             title={<><FileSearchOutlined /> 工具箱</>}
             size="small"
-            bodyStyle={{ padding: '12px' }}
+            styles={{ body: { padding: '12px' } }}
         >
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Flex vertical gap="small" style={{ width: '100%' }}>
                 <Button
                     type="primary"
                     icon={<FileSearchOutlined />}
@@ -36,7 +36,7 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
                 >
                     Excel 导出
                 </Button>
-            </Space>
+            </Flex>
         </Card>
     );
 };

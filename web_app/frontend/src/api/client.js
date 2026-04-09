@@ -19,7 +19,7 @@ apiClient.interceptors.request.use(request => {
     return request;
 }, error => {
     console.error('[API Request Error]', error);
-    message.error('网络请求发送失败，请检查网络连接');
+    // message.error('网络请求发送失败，请检查网络连接');
     return Promise.reject(error);
 });
 
@@ -32,15 +32,16 @@ apiClient.interceptors.response.use(response => {
         // 请求已发出，服务器响应状态码不在 2xx 范围
         console.error(`[API Error Response] ${error.response.status} ${error.config.url}`, error.response.data);
         const errorMsg = error.response.data?.detail || error.response.data?.error || `服务器错误 (${error.response.status})`;
-        message.error(errorMsg);
+        // TODO: Move message to component level to avoid antd static function warning
+        // message.error(errorMsg);
     } else if (error.request) {
         // 请求已发出，但没有收到响应
         console.error('[API No Response]', error.request);
-        message.error('服务器无响应，请检查后台服务是否启动或网络状态');
+        // message.error('服务器无响应，请检查后台服务是否启动或网络状态');
     } else {
         // 发送请求时触发了错误
         console.error('[API Error Setup]', error.message);
-        message.error(`请求错误: ${error.message}`);
+        // message.error(`请求错误: ${error.message}`);
     }
     return Promise.reject(error);
 });

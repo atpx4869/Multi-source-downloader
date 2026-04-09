@@ -11,7 +11,8 @@ import {
     Row,
     Col,
     Alert,
-    Table
+    Table,
+    Flex
 } from 'antd';
 import {
     UploadOutlined,
@@ -29,7 +30,7 @@ const { Text } = Typography;
 const { Dragger } = Upload;
 
 // API 基础 URL
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const ExcelCompletionPage = ({ onBack }) => {
     const [file, setFile] = useState(null);
@@ -177,7 +178,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                         </Dragger>
                     </Col>
                     <Col span={8}>
-                        <Space direction="vertical" style={{ width: '100%' }}>
+                        <Flex vertical gap="small" style={{ width: '100%' }}>
                             <Button
                                 type="primary"
                                 icon={<UploadOutlined />}
@@ -196,7 +197,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                             >
                                 重置
                             </Button>
-                        </Space>
+                        </Flex>
                     </Col>
                 </Row>
 
@@ -255,7 +256,7 @@ const ExcelCompletionPage = ({ onBack }) => {
                         title="处理日志"
                         size="small"
                         style={{ maxHeight: 200, overflow: 'auto' }}
-                        bodyStyle={{ padding: '8px 12px' }}
+                        styles={{ body: { padding: '8px 12px' } }}
                     >
                         {taskStatus.logs?.map((log, index) => (
                             <div key={index} style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 0' }}>
