@@ -134,6 +134,9 @@ class ZBYSource(BaseSource):
     DOWNLOAD_TIMEOUT = get_timeout("ZBY", "download")
     API_TIMEOUT = get_timeout("ZBY", "api")
 
+    # 临时覆盖缩短搜索超时
+    SEARCH_TIMEOUT = 15
+
     # 类级别的配置缓存（所有实例共享）
     _api_base_url_cache = None
     _cache_timestamp = 0

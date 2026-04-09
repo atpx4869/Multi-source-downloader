@@ -76,7 +76,8 @@ class GBWSource:
         }
         
         try:
-            resp = self.session.get(url, params=params, timeout=15)
+            # 优化超时控制，使用较短的连接超时和读取超时
+            resp = self.session.get(url, params=params, timeout=(5, 10))
             resp.raise_for_status()
             data = resp.json()
             

@@ -81,6 +81,7 @@ class SearchService:
             )
             
         except asyncio.TimeoutError:
+            # 超时返回部分结果（如果可能）或者空列表
             return SearchResponse(
                 source=source,
                 query=query,
@@ -95,7 +96,7 @@ class SearchService:
                 query=query,
                 count=0,
                 items=[],
-                error=str(e),
+                error=f"搜索异常: {str(e)}",
                 elapsed_time=time.time() - start_time
             )
     

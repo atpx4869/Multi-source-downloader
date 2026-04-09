@@ -41,8 +41,8 @@ PASSWORD = "888888"
 MAX_PAGES = 5  # 每次检索最多抓取的分页数，防止阻塞
 
 # 使用统一的超时配置
-TIMEOUT = get_timeout("BY", "search")  # 搜索超时
-TIMEOUT_FAST = get_timeout("BY", "download")  # 下载超时
+TIMEOUT = 10  # 搜索超时
+TIMEOUT_FAST = 10  # 下载超时
 
 
 def _extract_hidden(html: str, name: str) -> str:
