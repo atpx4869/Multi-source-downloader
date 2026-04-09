@@ -133,9 +133,78 @@ _STD_NO_RE = re.compile(r"[\s/\-–—_:：]+")
 _AD_CACHE: dict = {}
 _AD_CACHE_LOCK = threading.Lock()
 
+import sys
+import os
+import subprocess
+import threading
+import atexit
+import time
+import requests
+
+backend_process = None
+
+def start_backend_server():
+    global backend_process
+    try:
+        # Check if already running
+        try:
+            resp = requests.get("http://127.0.0.1:8000/api/", timeout=1)
+            if resp.status_code == 200:
+                print("Backend server is already running.")
+                return
+        except:
+            pass
+            
+        print("Starting backend server on port 8000...")
+        
+        # Determine python executable
+        python_exe = sys.executable
+        # Get absolute path to web_app/backend/main.py
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backend_script = os.path.join(project_root, "web_app", "backend", "main.py")
+        
+        if os.path.exists(backend_script):
+            # Run the uvicorn server via the main.py script
+            backend_process = subprocess.Popen(
+                [python_exe, backend_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            print(f"Backend server started with PID: {backend_process.pid}")
+            
+            # Wait for server to be ready
+            for _ in range(10):
+                try:
+                    resp = requests.get("http://127.0.0.1:8000/api/", timeout=1)
+                    if resp.status_code == 200:
+                        print("Backend server is ready.")
+                        break
+                except:
+                    time.sleep(1)
+        else:
+            print(f"Backend script not found at {backend_script}")
+    except Exception as e:
+        print(f"Failed to start backend server: {e}")
+
+def stop_backend_server():
+    global backend_process
+    if backend_process:
+        print("Stopping backend server...")
+        backend_process.terminate()
+        try:
+            backend_process.wait(timeout=3)
+        except:
+            backend_process.kill()
+        print("Backend server stopped.")
+
+atexit.register(stop_backend_server)
+
+# 在文件加载时尝试启动后端
+threading.Thread(target=start_backend_server, daemon=True).start()
+
 def get_aggregated_downloader(enable_sources=None, output_dir=None):
-    """返回一个复用的 AggregatedDownloader 实例（按 enable_sources+output_dir 缓存）。
-    如果 AggregatedDownloader 未导入或无法实例化，则返回 None 或抛出原始异常。
+    """返回一个复用的 HttpAggregatedDownloader 实例（按 enable_sources+output_dir 缓存）。
     """
     if output_dir is None:
         output_dir = "downloads"
@@ -145,19 +214,11 @@ def get_aggregated_downloader(enable_sources=None, output_dir=None):
         if inst is not None:
             return inst
 
-        # 延迟导入 core.AggregatedDownloader，若不可用则返回 None
         try:
-            from core import AggregatedDownloader
-        
-            try:
-                inst = AggregatedDownloader(enable_sources=enable_sources, output_dir=output_dir)
-            except Exception:
-                # 打印详细 traceback 以便诊断初始化失败原因
-                print("[get_aggregated_downloader] AggregatedDownloader init failed:")
-                traceback.print_exc()
-                return None
+            from core.http_aggregated_downloader import HttpAggregatedDownloader
+            inst = HttpAggregatedDownloader(enable_sources=enable_sources, output_dir=output_dir)
         except Exception:
-            print("[get_aggregated_downloader] import/core failure:")
+            print("[get_aggregated_downloader] HttpAggregatedDownloader init failed:")
             traceback.print_exc()
             return None
 
@@ -165,7 +226,7 @@ def get_aggregated_downloader(enable_sources=None, output_dir=None):
         return inst
 
 try:
-    from core import AggregatedDownloader
+    from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
     from core.models import Standard
     from core.smart_search import StandardSearchMerger
 except Exception:
@@ -3509,7 +3570,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         try:
             from core.models import Standard
-            from core.aggregated_downloader import AggregatedDownloader
+            from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
             from pathlib import Path
             
             # 从任务元数据重建 Standard 对象

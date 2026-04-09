@@ -125,7 +125,7 @@ class EnhancedSmartSearcher:
         
         返回: (sources_used, fallback_info, total_count)
         """
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
         
         fallback_info = {'source': None, 'used': False, 'retry_count': 0}
         sources_used = []
@@ -135,16 +135,8 @@ class EnhancedSmartSearcher:
             """搜索单个数据源，逐条返回"""
             results = []
             try:
-                target_src = next((s for s in downloader.sources if s.name == source_name), None)
-                if not target_src:
-                    return []
-                
-                try:
-                    items = target_src.search(keyword)
-                except TypeError:
-                    items = target_src.search(keyword)
-                
-                items = downloader._ensure_unified_standards(items)
+                items = downloader.search_single_source(source_name, keyword)
+                items = downloader._ensure_unified_standards(items) if hasattr(downloader, '_ensure_unified_standards') else items
                 
                 for it in items:
                     result = {
@@ -229,39 +221,33 @@ class EnhancedSmartSearcher:
         
         返回: (sources_used, fallback_info, total_count)
         """
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
         
         fallback_info = {'source': None, 'used': False, 'retry_count': 0}
         
         # 优先尝试 ZBY
         try:
-            target_src = next((s for s in downloader.sources if s.name == "ZBY"), None)
-            if target_src:
-                try:
-                    items = target_src.search(keyword)
-                except TypeError:
-                    items = target_src.search(keyword)
-                
-                items = downloader._ensure_unified_standards(items)
-                
-                rows = []
-                for it in items:
-                    rows.append({
-                        "std_no": it.std_no,
-                        "name": it.name,
-                        "publish": it.publish or "",
-                        "implement": it.implement or "",
-                        "status": it.status or "",
-                        "replace_std": it.replace_std or "",
-                        "has_pdf": bool(it.has_pdf),
-                        "sources": it.sources or ["ZBY"],
-                        "obj": it,
-                    })
-                
-                if rows:
-                    if on_result:
-                        on_result("ZBY", rows)
-                    return ["ZBY"], fallback_info, len(rows)
+            items = downloader.search_single_source("ZBY", keyword)
+            items = downloader._ensure_unified_standards(items) if hasattr(downloader, '_ensure_unified_standards') else items
+            
+            rows = []
+            for it in items:
+                rows.append({
+                    "std_no": it.std_no,
+                    "name": it.name,
+                    "publish": it.publish or "",
+                    "implement": it.implement or "",
+                    "status": it.status or "",
+                    "replace_std": it.replace_std or "",
+                    "has_pdf": bool(it.has_pdf),
+                    "sources": it.sources or ["ZBY"],
+                    "obj": it,
+                })
+            
+            if rows:
+                if on_result:
+                    on_result("ZBY", rows)
+                return ["ZBY"], fallback_info, len(rows)
         except Exception:
             pass
         
@@ -278,22 +264,14 @@ class EnhancedSmartSearcher:
         
         返回: (sources_used, fallback_info, total_count)
         """
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
         
         fallback_sources = ["GBW", "BY"]  # 备用数据源的优先级
         
         for retry_count, fallback_source in enumerate(fallback_sources):
             try:
-                target_src = next((s for s in downloader.sources if s.name == fallback_source), None)
-                if not target_src:
-                    continue
-                
-                try:
-                    items = target_src.search(keyword)
-                except TypeError:
-                    items = target_src.search(keyword)
-                
-                items = downloader._ensure_unified_standards(items)
+                items = downloader.search_single_source(fallback_source, keyword)
+                items = downloader._ensure_unified_standards(items) if hasattr(downloader, '_ensure_unified_standards') else items
                 
                 rows = []
                 for it in items:
@@ -332,7 +310,7 @@ class EnhancedSmartSearcher:
         
         返回: (results, sources_used, fallback_info)
         """
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
         
         fallback_info = {'source': None, 'used': False, 'retry_count': 0}
         sources_used = []
@@ -340,18 +318,8 @@ class EnhancedSmartSearcher:
         def search_source(source_name: str, timeout: int):
             """搜索单个数据源"""
             try:
-                # 复用已有的 downloader 中的 source
-                target_src = next((s for s in downloader.sources if s.name == source_name), None)
-                if not target_src:
-                    return source_name, None
-                
-                try:
-                    items = target_src.search(keyword)
-                except TypeError:
-                    items = target_src.search(keyword)
-                
-                # 转换统一模型
-                items = downloader._ensure_unified_standards(items)
+                items = downloader.search_single_source(source_name, keyword)
+                items = downloader._ensure_unified_standards(items) if hasattr(downloader, '_ensure_unified_standards') else items
                 
                 rows = []
                 for it in items:
@@ -419,37 +387,31 @@ class EnhancedSmartSearcher:
         
         返回: (results, sources_used, fallback_info)
         """
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
         
         fallback_info = {'source': None, 'used': False, 'retry_count': 0}
         
         # 优先尝试 ZBY
         try:
-            target_src = next((s for s in downloader.sources if s.name == "ZBY"), None)
-            if target_src:
-                try:
-                    items = target_src.search(keyword)
-                except TypeError:
-                    items = target_src.search(keyword)
-                
-                items = downloader._ensure_unified_standards(items)
-                
-                rows = []
-                for it in items:
-                    rows.append({
-                        "std_no": it.std_no,
-                        "name": it.name,
-                        "publish": it.publish or "",
-                        "implement": it.implement or "",
-                        "status": it.status or "",
-                        "replace_std": it.replace_std or "",
-                        "has_pdf": bool(it.has_pdf),
-                        "sources": it.sources or ["ZBY"],
-                        "obj": it,
-                    })
-                
-                if rows:
-                    return rows, ["ZBY"], fallback_info
+            items = downloader.search_single_source("ZBY", keyword)
+            items = downloader._ensure_unified_standards(items) if hasattr(downloader, '_ensure_unified_standards') else items
+            
+            rows = []
+            for it in items:
+                rows.append({
+                    "std_no": it.std_no,
+                    "name": it.name,
+                    "publish": it.publish or "",
+                    "implement": it.implement or "",
+                    "status": it.status or "",
+                    "replace_std": it.replace_std or "",
+                    "has_pdf": bool(it.has_pdf),
+                    "sources": it.sources or ["ZBY"],
+                    "obj": it,
+                })
+            
+            if rows:
+                return rows, ["ZBY"], fallback_info
         except Exception:
             pass
         
@@ -463,22 +425,14 @@ class EnhancedSmartSearcher:
         
         返回: (results, sources_used, fallback_info)
         """
-        from core.aggregated_downloader import AggregatedDownloader
+        from core.http_aggregated_downloader import HttpAggregatedDownloader as AggregatedDownloader
         
         fallback_sources = ["GBW", "BY"]  # 备用数据源的优先级
         
         for retry_count, fallback_source in enumerate(fallback_sources):
             try:
-                target_src = next((s for s in downloader.sources if s.name == fallback_source), None)
-                if not target_src:
-                    continue
-                
-                try:
-                    items = target_src.search(keyword)
-                except TypeError:
-                    items = target_src.search(keyword)
-                
-                items = downloader._ensure_unified_standards(items)
+                items = downloader.search_single_source(fallback_source, keyword)
+                items = downloader._ensure_unified_standards(items) if hasattr(downloader, '_ensure_unified_standards') else items
                 
                 rows = []
                 for it in items:
