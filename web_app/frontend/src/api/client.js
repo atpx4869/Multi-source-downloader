@@ -2,7 +2,7 @@ import axios from 'axios';
 import { message } from 'antd';
 
 // API基础URL (使用环境变量，支持生产环境部署)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // 创建axios实例
 const apiClient = axios.create({

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Layout, message } from 'antd';
+import { Layout, App as AntdApp } from 'antd';
 import SearchBar from './components/SearchBar';
 import SourceTabs from './components/SourceTabs';
 import BatchActions from './components/BatchActions';
@@ -28,6 +28,7 @@ const extractStandardType = (std_no) => {
 };
 
 function App() {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [activeSource, setActiveSource] = useState('all');
   const [searchResults, setSearchResults] = useState({});
@@ -162,7 +163,7 @@ function App() {
       const resultsWithCache = await Promise.all(
         targetItems.map(async (item) => {
           try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+            const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
             const url = `${apiBase}/download/check-cache/${encodeURIComponent(item.std_no)}`;
             const response = await fetch(url);
             const cacheData = await response.json();
@@ -257,9 +258,10 @@ function App() {
   const triggerBrowserDownload = async (filename) => {
     try {
       // 从静态文件目录下载
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-      // 由于静态文件在 /downloads 下，我们需要从 API_BASE_URL 提取出主机部分
-      const apiHost = new URL(apiBaseUrl).origin;
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+      // 由于静态文件在 /downloads 下，我们需要提取出主机部分
+      // 如果 apiBaseUrl 是相对路径 '/api'，那么 apiHost 就是空字符串，url 就是 '/downloads/xxx'
+      const apiHost = apiBaseUrl.startsWith('http') ? new URL(apiBaseUrl).origin : '';
       const url = `${apiHost}/downloads/${encodeURIComponent(filename)}`;
 
       // 使用 fetch + blob 方式强制下载，避免浏览器直接打开 PDF
