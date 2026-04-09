@@ -7,7 +7,16 @@ import './index.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider 
+      locale={zhCN}
+      theme={{
+        token: {
+          colorPrimary: '#5a67d8',
+          borderRadius: 6,
+          colorBgContainer: '#ffffff',
+        },
+      }}
+    >
       <App />
     </ConfigProvider>
   </StrictMode>,

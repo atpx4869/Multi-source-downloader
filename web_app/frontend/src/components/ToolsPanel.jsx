@@ -19,10 +19,6 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
                     icon={<FileSearchOutlined />}
                     onClick={onStandardCheck}
                     block
-                    style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        border: 'none'
-                    }}
                 >
                     标准查新
                 </Button>
@@ -30,11 +26,6 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
                     icon={<CloudDownloadOutlined />}
                     onClick={onBatchImport}
                     block
-                    style={{
-                        background: '#1890ff',
-                        color: 'white',
-                        border: 'none'
-                    }}
                 >
                     批量导入
                 </Button>
@@ -42,11 +33,6 @@ const ToolsPanel = ({ onStandardCheck, onExcelExport, onBatchImport }) => {
                     icon={<FileExcelOutlined />}
                     onClick={onExcelExport}
                     block
-                    style={{
-                        background: '#52c41a',
-                        color: 'white',
-                        border: 'none'
-                    }}
                 >
                     Excel 导出
                 </Button>

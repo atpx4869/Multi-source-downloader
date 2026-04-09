@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, List, Typography, Empty } from 'antd';
-import { ClockCircleOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, SearchOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -10,7 +10,7 @@ const HistoryPanel = ({ history, onHistoryClick }) => {
             title={<><ClockCircleOutlined /> 历史记录</>}
             size="small"
             style={{ marginBottom: 16 }}
-            bodyStyle={{ maxHeight: 300, overflow: 'auto' }}
+            styles={{ body: { maxHeight: 300, overflow: 'auto' } }}
         >
             {history.length === 0 ? (
                 <Empty description="暂无搜索历史" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -23,10 +23,10 @@ const HistoryPanel = ({ history, onHistoryClick }) => {
                             style={{ cursor: 'pointer', padding: '8px 0' }}
                             onClick={() => onHistoryClick(item.query)}
                         >
-                            <Text ellipsis style={{ fontSize: 13 }}>
-                                🔍 {item.query}
+                            <Text ellipsis style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <SearchOutlined style={{ color: '#bfbfbf' }} /> {item.query}
                             </Text>
-                            <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
+                            <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
                                 {item.time}
                             </Text>
                         </List.Item>
