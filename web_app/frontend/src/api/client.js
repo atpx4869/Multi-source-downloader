@@ -49,7 +49,7 @@ apiClient.interceptors.response.use(response => {
 // 搜索API
 export const searchAPI = {
     // 搜索所有数据源
-    searchAll: async (query, sources = null, limit = 100, timeout = 30) => {
+    searchAll: async (query, sources = null, limit = 100, timeout = 10) => {
         const params = { q: query, limit, timeout };
         if (sources && sources.length > 0) {
             params.sources = sources;
@@ -59,7 +59,7 @@ export const searchAPI = {
     },
 
     // 搜索单个数据源
-    searchSingle: async (source, query, limit = 100, timeout = 30) => {
+    searchSingle: async (source, query, limit = 100, timeout = 10) => {
         const response = await apiClient.get(`/search/${source}`, {
             params: { q: query, limit, timeout },
         });
@@ -67,7 +67,7 @@ export const searchAPI = {
     },
 
     // 搜索第一个可用源
-    searchFirstAvailable: async (query, limit = 100, timeout = 30) => {
+    searchFirstAvailable: async (query, limit = 100, timeout = 10) => {
         const response = await apiClient.get('/search/first/available', {
             params: { q: query, limit, timeout },
         });
